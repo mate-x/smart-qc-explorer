@@ -25,8 +25,8 @@ export interface DeviceInfo {
 }
 
 export interface ConfigResponse {
-  preprocessing_config: PreprocessingConfig;
-  model_config: ModelConfig;
+  preprocessing_config: PreprocessingConfig | null;
+  model_config: ModelConfig | null;
   device_info: DeviceInfo;
 }
 

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTrainingStore } from '../../store/trainingStore';
 import { useConfigStore } from '../../store/configStore';
-import { getQueue } from '../../api/queueApi';
-import type { QueueItem } from '../../api/queueApi';
+import { getQueue } from '../../api/configApi';
+import type { QueueItem } from '../../types/config';
 import { startBatchTraining, stopBatchTraining, skipBatchItem } from '../../api/trainingApi';
 
 const STATUS_LABEL: Record<string, string> = {
