@@ -6,8 +6,10 @@ import Tab2Config from './pages/Tab2Config';
 import Tab3Training from './pages/Tab3Training';
 import Tab4Experiments from './pages/Tab4Experiments';
 import Tab5AnomalyMap from './pages/Tab5AnomalyMap';
+import { useTrainingWs } from './hooks/useTrainingWs';
 
 export default function App() {
+  useTrainingWs();
   return (
     <div className="flex h-full overflow-hidden">
       <Sidebar />
