@@ -64,7 +64,7 @@ function dispatch(msg: WsMessage) {
       break;
 
     case 'completed':
-      s.setCompleted(msg.exp_id, msg.auc, msg.duration_seconds, msg.message);
+      s.setCompleted(msg.exp_id, msg.auc, msg.duration_seconds, msg.message, msg.early_stopped);
       s.bumpQueueSignal();
       break;
 

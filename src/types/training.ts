@@ -42,7 +42,7 @@ export type WsMessage =
   | { type: 'log'; message: string }
   | { type: 'stage'; stage_idx: number; stage_name: string }
   | { type: 'paused'; step: number; ckpt_path: string }
-  | { type: 'completed'; exp_id: string; auc: number; duration_seconds: number; message: string }
+  | { type: 'completed'; exp_id: string; auc: number; duration_seconds: number; message: string; early_stopped: boolean }
   | { type: 'stopped'; step: number }
   | { type: 'error'; message: string; traceback: string }
   | { type: 'batch_item_started'; exp_id: string; queue_idx: number }

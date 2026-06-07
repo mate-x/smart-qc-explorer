@@ -18,7 +18,7 @@ interface TrainingState extends TrainingStatusResponse {
   setStage: (idx: number, name: string) => void;
   setStatus: (status: TrainingStatusResponse['status']) => void;
   setPaused: (ckptPath: string) => void;
-  setCompleted: (expId: string, auc: number, durationSecs: number, message: string) => void;
+  setCompleted: (expId: string, auc: number, durationSecs: number, message: string, earlyStopped: boolean) => void;
   setStopped: () => void;
   incBatchDone: () => void;
   setBatchCompleted: (completed: number, failed: number, skipped: number) => void;
@@ -73,13 +73,13 @@ export const useTrainingStore = create<TrainingState>((set) => ({
 
   setPaused: (ckptPath) => set({ status: 'paused', last_ckpt_path: ckptPath }),
 
-  setCompleted: (_expId, auc, durationSecs, message) =>
+  setCompleted: (_expId, auc, durationSecs, message, earlyStopped) =>
     set({
       status: 'idle',
       progress: null,
       last_result: {
         level: 'success',
-        msg: message || `학습 완료. AUC: ${auc.toFixed(4)} | ${Math.floor(durationSecs / 60)}분 ${durationSecs % 60}초`,
+        msg: message || `${earlyStopped ? '[Early Stopping] ' : ''}학습 완료. AUC: ${auc.toFixed(4)} | ${Math.floor(durationSecs / 60)}분 ${durationSecs % 60}초`,
       },
     }),
 

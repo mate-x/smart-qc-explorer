@@ -133,7 +133,9 @@ export default function Tab4Experiments() {
                   <td className="border border-gray-200 px-2 py-1.5 whitespace-nowrap">
                     {e.created_at.slice(0, 19).replace('T', ' ')}
                   </td>
-                  <td className="border border-gray-200 px-2 py-1.5">{e.status}</td>
+                  <td className="border border-gray-200 px-2 py-1.5">
+                    {e.status === 'completed' && e.early_stopped ? '완료 (조기종료)' : e.status}
+                  </td>
                 </tr>
               );
             })}

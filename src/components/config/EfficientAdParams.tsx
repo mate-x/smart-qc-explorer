@@ -16,6 +16,9 @@ export interface EfficientAdParamsState {
   scheduler: 'StepLR' | 'CosineAnnealingLR';
   use_imagenet_penalty: boolean;
   penalty_batch_size: number;
+  early_stopping: boolean;
+  patience: number;
+  min_delta: number;
 }
 
 export const DEFAULT_EFFICIENTAD: EfficientAdParamsState = {
@@ -34,6 +37,9 @@ export const DEFAULT_EFFICIENTAD: EfficientAdParamsState = {
   scheduler: 'StepLR',
   use_imagenet_penalty: false,
   penalty_batch_size: 8,
+  early_stopping: false,
+  patience: 5000,
+  min_delta: 0.001,
 };
 
 interface Props {
@@ -100,6 +106,41 @@ export default function EfficientAdParams({ value, onChange }: Props) {
             step={1000}
           />
         </div>
+
+        <div className="flex items-center gap-3">
+          <label className="w-28 shrink-0 text-xs text-gray-600">Early Stopping</label>
+          <input
+            type="checkbox"
+            checked={value.early_stopping}
+            onChange={(e) => set('early_stopping', e.target.checked)}
+            className="w-4 h-4 cursor-pointer"
+          />
+        </div>
+
+        {value.early_stopping && (
+          <>
+            <div className="flex items-center gap-3">
+              <label className="w-28 shrink-0 text-xs text-gray-600">Patience (steps)</label>
+              <NumInput
+                value={value.patience}
+                onChange={(v) => set('patience', Math.round(v))}
+                min={100}
+                max={200000}
+                step={500}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="w-28 shrink-0 text-xs text-gray-600">Min Delta</label>
+              <NumInput
+                value={value.min_delta}
+                onChange={(v) => set('min_delta', v)}
+                min={0}
+                max={1}
+                step={0.001}
+              />
+            </div>
+          </>
+        )}
 
         <div className="flex items-center gap-3">
           <label className="w-28 shrink-0 text-xs text-gray-600">Optimizer</label>

@@ -38,4 +38,5 @@ export interface Experiment {
   threshold_value?: number;
   dataset_path?: string;
   image_size?: number;
+  early_stopped?: boolean;
 }
