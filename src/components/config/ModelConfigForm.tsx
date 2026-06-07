@@ -1,13 +1,8 @@
 import { useState } from 'react';
 import type { ModelConfig } from '../../types/config';
-import EfficientAdParams, {
-  DEFAULT_EFFICIENTAD,
-  type EfficientAdParamsState,
-} from './EfficientAdParams';
-import PatchCoreParams, {
-  DEFAULT_PATCHCORE,
-  type PatchCoreParamsState,
-} from './PatchCoreParams';
+import type { EfficientAdParamsState, PatchCoreParamsState } from '../../types/modelParams';
+import EfficientAdParams, { DEFAULT_EFFICIENTAD } from './EfficientAdParams';
+import PatchCoreParams, { DEFAULT_PATCHCORE } from './PatchCoreParams';
 import { previewThreshold } from '../../api/configApi';
 
 interface Props {

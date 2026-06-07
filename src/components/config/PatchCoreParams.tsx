@@ -1,13 +1,6 @@
-export interface PatchCoreParamsState {
-  backbone: 'wide_resnet50_2' | 'resnet18' | 'resnet50';
-  pretrained_source: 'torchvision' | 'local';
-  pretrained_path: string | null;
-  coreset_sampling_ratio: number;
-  neighbourhood_kernel_size: 1 | 3 | 5 | 7 | 9;
-  max_train: number;
-  knn: number;
-  top_k_ratio: number;
-}
+import type { PatchCoreParamsState } from '../../types/modelParams';
+
+export type { PatchCoreParamsState };
 
 export const DEFAULT_PATCHCORE: PatchCoreParamsState = {
   backbone: 'wide_resnet50_2',

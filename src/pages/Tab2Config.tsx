@@ -24,7 +24,7 @@ const DEFAULT_MODEL: ModelConfig = {
   random_seed: 42,
   threshold_method: 'percentile',
   threshold_value: 95.0,
-  params: DEFAULT_EFFICIENTAD as unknown as Record<string, unknown>,
+  params: DEFAULT_EFFICIENTAD,
 };
 
 export default function Tab2Config() {

@@ -11,13 +11,14 @@ interface Props {
 
 type VarValues = Record<string, unknown[]>;
 
-function generateCombinations(
-  baseParams: Record<string, unknown>,
+function generateCombinations<T extends object>(
+  baseParams: T,
   variables: VarValues,
-): Record<string, unknown>[] {
+): T[] {
+  const base = baseParams as Record<string, unknown>;
   const keys = Object.keys(variables).filter((k) => variables[k].length > 0);
-  if (keys.length === 0) return [{ ...baseParams }];
-  let combos: Record<string, unknown>[] = [{ ...baseParams }];
+  if (keys.length === 0) return [{ ...base }] as T[];
+  let combos: Record<string, unknown>[] = [{ ...base }];
   for (const key of keys) {
     const next: Record<string, unknown>[] = [];
     for (const combo of combos) {
@@ -27,7 +28,7 @@ function generateCombinations(
     }
     combos = next;
   }
-  return combos;
+  return combos as T[];
 }
 
 function parseNumList(s: string): number[] {
@@ -148,7 +149,7 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
 
   function updateBatchPreview() {
     const vars = buildVariables();
-    const baseParams = (modelConfig.params ?? {}) as Record<string, unknown>;
+    const baseParams = modelConfig.params;
     const combos = generateCombinations(baseParams, vars);
     setBatchPreview(combos.length);
   }
@@ -159,7 +160,7 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
       setBatchAddError('변경할 파라미터 값을 하나 이상 선택해 주세요.');
       return;
     }
-    const baseParams = (modelConfig.params ?? {}) as Record<string, unknown>;
+    const baseParams = modelConfig.params;
     const combos = generateCombinations(baseParams, vars);
     const sid = setId.trim() || undefined;
 

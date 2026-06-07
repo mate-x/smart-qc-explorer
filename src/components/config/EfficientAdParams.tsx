@@ -1,25 +1,7 @@
 import { useState } from 'react';
+import type { EfficientAdParamsState } from '../../types/modelParams';
 
-export interface EfficientAdParamsState {
-  model_size: 'small' | 'medium';
-  train_steps: number;
-  optimizer: 'adam' | 'adamw' | 'sgd';
-  learning_rate: number;
-  weight_decay: number;
-  out_channels: 128 | 256 | 384 | 512;
-  padding: boolean;
-  ae_loss_weight: number;
-  autoencoder_lr: number;
-  autoencoder_weight_decay: number;
-  lr_decay_epochs: number;
-  lr_decay_factor: number;
-  scheduler: 'StepLR' | 'CosineAnnealingLR';
-  use_imagenet_penalty: boolean;
-  penalty_batch_size: number;
-  early_stopping: boolean;
-  patience: number;
-  min_delta: number;
-}
+export type { EfficientAdParamsState };
 
 export const DEFAULT_EFFICIENTAD: EfficientAdParamsState = {
   model_size: 'medium',

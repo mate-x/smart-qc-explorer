@@ -4,9 +4,11 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer,
 } from 'recharts';
-import type { Experiment, ExperimentMetrics } from '../../types/experiments';
+import type { Experiment } from '../../types/experiments';
 
-const COMPARE_METRICS: { key: keyof ExperimentMetrics; label: string }[] = [
+type NumericMetricKey = 'accuracy' | 'precision' | 'recall' | 'f1_score' | 'f2_score';
+
+const COMPARE_METRICS: { key: NumericMetricKey; label: string }[] = [
   { key: 'accuracy', label: 'Accuracy' },
   { key: 'precision', label: 'Precision' },
   { key: 'recall', label: 'Recall' },

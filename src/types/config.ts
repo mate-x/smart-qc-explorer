@@ -1,3 +1,7 @@
+import type { EfficientAdParamsState, PatchCoreParamsState } from './modelParams';
+
+export type { EfficientAdParamsState, PatchCoreParamsState };
+
 export interface PreprocessingConfig {
   method: 'none' | 'homomorphic' | 'he' | 'clahe';
   background_method: 'none' | 'sam2';
@@ -15,7 +19,7 @@ export interface ModelConfig {
   random_seed: number;
   threshold_method: 'percentile' | 'absolute';
   threshold_value: number;
-  params: Record<string, unknown>;
+  params: EfficientAdParamsState | PatchCoreParamsState;
 }
 
 export interface DeviceInfo {
