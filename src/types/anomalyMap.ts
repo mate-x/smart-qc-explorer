@@ -24,3 +24,8 @@ export interface JobStatusResponse {
   status: JobStatus;
   error?: string;
 }
+
+export interface AnomalyMapStatus {
+  built: boolean;
+  image_count: number;
+}

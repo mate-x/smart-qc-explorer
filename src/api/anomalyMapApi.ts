@@ -1,5 +1,8 @@
 import { apiClient } from './client';
-import type { AnomalyMapImagesResponse, JobStatusResponse } from '../types/anomalyMap';
+import type { AnomalyMapImagesResponse, AnomalyMapStatus, JobStatusResponse } from '../types/anomalyMap';
+
+export const getBuildStatus = (expId: string) =>
+  apiClient.get<AnomalyMapStatus>(`/api/anomaly-map/${expId}/status`);
 
 export const buildAnomalyMap = (expId: string) =>
   apiClient.post<{ job_id: string }>(`/api/anomaly-map/${expId}/build`);
