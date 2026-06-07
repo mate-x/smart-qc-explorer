@@ -25,24 +25,18 @@ export const previewThreshold = (threshold_method: string, threshold_value: numb
     threshold_value,
   });
 
-export const saveConfigYaml = () =>
-  apiClient.post<{ success: boolean }>('/api/config/yaml/save');
-
-export const loadConfigYaml = () =>
-  apiClient.post<{ preprocessing_config: PreprocessingConfig; model_config: ModelConfig }>(
-    '/api/config/yaml/load',
-  );
-
 export const getQueue = () =>
   apiClient.get<QueueItem[]>('/api/queue');
 
 export const addToQueue = (
   preprocessing_config: PreprocessingConfig,
   model_config: ModelConfig,
+  set_id?: string,
 ) =>
   apiClient.post<{ id: string; name: string }>('/api/queue', {
     preprocessing_config,
     model_config,
+    ...(set_id ? { set_id } : {}),
   });
 
 export const deleteQueueItem = (itemId: string) =>

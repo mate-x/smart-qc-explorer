@@ -1,8 +1,9 @@
 export interface PreprocessingConfig {
   method: 'none' | 'homomorphic' | 'he' | 'clahe';
+  background_method: 'none' | 'sam2';
   resize_mode: 'padding';
   image_size: number;
-  normalization: 'imagenet' | 'custom';
+  normalization: 'imagenet';
   mean: [number, number, number];
   std: [number, number, number];
   params: Record<string, unknown> | null;
@@ -35,9 +36,10 @@ export interface QueueItem {
   preprocessing_config: PreprocessingConfig;
   model_config: ModelConfig;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  set_id?: string | null;
 }
 
 export interface ThresholdPreviewResponse {
-  normal_ratio: number;
-  defect_ratio: number;
+  normal_ratio: number | null;
+  defect_ratio: number | null;
 }

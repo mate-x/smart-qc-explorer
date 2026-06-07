@@ -13,23 +13,25 @@ export const getAnomalyImages = (
   defect_class?: string,
 ) =>
   apiClient.get<AnomalyMapImagesResponse>(`/api/anomaly-map/${expId}/images`, {
-    params: { threshold, ...(defect_class ? { defect_class } : {}) },
+    params: { threshold, ...(defect_class && defect_class !== '전체' ? { defect_class } : {}) },
   });
 
+// image_path 형식: "{class}/{filename}"
 export const getTripletImageUrl = (expId: string, imagePath: string) =>
   `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/triplet`;
 
 export const exportCsv = (expId: string, threshold: number, defect_class?: string) =>
   apiClient.get(`/api/anomaly-map/${expId}/export/csv`, {
-    params: { threshold, ...(defect_class ? { defect_class } : {}) },
+    params: { threshold, ...(defect_class && defect_class !== '전체' ? { defect_class } : {}) },
     responseType: 'blob',
   });
 
 export const prepareZip = (expId: string, threshold: number, defect_class?: string) =>
   apiClient.post<{ job_id: string }>(`/api/anomaly-map/${expId}/export/zip`, {
     threshold,
-    defect_class,
+    defect_class: defect_class ?? '전체',
   });
 
+// 완료 시만 ZIP 반환, 미완료(진행중) 시 400 반환 → 폴링은 getJobStatus 사용
 export const downloadZip = (jobId: string) =>
   apiClient.get(`/api/anomaly-map/zip/${jobId}`, { responseType: 'blob' });

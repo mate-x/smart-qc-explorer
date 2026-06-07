@@ -19,4 +19,6 @@ export interface Experiment {
   metrics: ExperimentMetrics | null;
   duration_seconds: number | null;
   model_path: string | null;
+  product_name?: string;
+  set_id?: string | null;
 }
