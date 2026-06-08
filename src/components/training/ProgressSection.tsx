@@ -31,17 +31,12 @@ export default function ProgressSection() {
   const [stopLoading, setStopLoading] = useState(false);
 
   useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log_lines]);
 
-  const pct = progress
-    ? Math.min(100, Math.round((progress.step / progress.total) * 100))
-    : 0;
+  const pct = progress ? Math.min(100, Math.round((progress.step / progress.total) * 100)) : 0;
   const ratio = progress ? progress.step / progress.total : 0;
-  const etaSecs =
-    ratio > 0 && progress ? Math.round((progress.elapsed / ratio) * (1 - ratio)) : null;
+  const etaSecs = ratio > 0 && progress ? Math.round((progress.elapsed / ratio) * (1 - ratio)) : null;
   const chartData = downsample(loss_history, 500);
 
   async function handlePauseToggle() {
@@ -52,9 +47,7 @@ export default function ProgressSection() {
       else await unpauseTraining();
     } catch (e: unknown) {
       setCtrlError((e as { message?: string })?.message ?? '오류');
-    } finally {
-      setPauseLoading(false);
-    }
+    } finally { setPauseLoading(false); }
   }
 
   async function handleStop() {
@@ -65,53 +58,42 @@ export default function ProgressSection() {
       else await stopTraining();
     } catch (e: unknown) {
       setCtrlError((e as { message?: string })?.message ?? '오류');
-    } finally {
-      setStopLoading(false);
-    }
+    } finally { setStopLoading(false); }
   }
 
   async function handleSkip() {
     setCtrlError(null);
-    try {
-      await skipBatchItem();
-    } catch (e: unknown) {
-      setCtrlError((e as { message?: string })?.message ?? '건너뜀 실패');
-    }
+    try { await skipBatchItem(); }
+    catch (e: unknown) { setCtrlError((e as { message?: string })?.message ?? '건너뜀 실패'); }
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {/* 배치 진행 */}
       {batch_mode && (
-        <p className="text-sm text-gray-600">
-          일괄 학습:{' '}
-          <span className="font-medium">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">일괄 학습</span>
+          <span className="text-xs bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
             {batch_done} / {batch_total}
           </span>
-          개 완료
-        </p>
+        </div>
       )}
 
-      {/* 진행률 */}
+      {/* 진행률 바 */}
       {progress && (
-        <div className="flex flex-col gap-1">
-          <div className="flex justify-between text-xs text-gray-500">
-            <span>
-              Step {progress.step.toLocaleString()} / {progress.total.toLocaleString()}
-            </span>
-            <span>{pct}%</span>
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between items-center text-xs text-slate-500">
+            <span>Step {progress.step.toLocaleString()} / {progress.total.toLocaleString()}</span>
+            <span className="font-semibold text-slate-700">{pct}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
             <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              className="bg-gradient-to-r from-sky-500 to-sky-400 h-2.5 rounded-full transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="flex gap-4 text-xs text-gray-500">
-            <span>
-              Loss:{' '}
-              <span className="font-mono text-gray-800">{progress.loss.toFixed(6)}</span>
-            </span>
+          <div className="flex gap-5 text-xs text-slate-500">
+            <span>Loss: <span className="font-mono font-medium text-slate-800">{progress.loss.toFixed(6)}</span></span>
             <span>경과: {fmtSecs(progress.elapsed)}</span>
             {etaSecs != null && <span>예상 잔여: {fmtSecs(etaSecs)}</span>}
           </div>
@@ -123,14 +105,14 @@ export default function ProgressSection() {
         <button
           onClick={handlePauseToggle}
           disabled={pauseLoading}
-          className="px-3 py-1.5 border border-gray-300 text-sm rounded hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
+          className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
         >
           {pauseLoading ? '...' : status === 'running' ? '⏸ 일시정지' : '▶ 재개'}
         </button>
         {batch_mode && (
           <button
             onClick={handleSkip}
-            className="px-3 py-1.5 border border-gray-300 text-sm rounded hover:bg-gray-50 cursor-pointer"
+            className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors cursor-pointer"
           >
             ⏭ 이번 건너뜀
           </button>
@@ -138,7 +120,7 @@ export default function ProgressSection() {
         <button
           onClick={handleStop}
           disabled={stopLoading}
-          className="px-3 py-1.5 border border-red-300 text-red-600 text-sm rounded hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+          className="px-4 py-2 border border-red-200 bg-white hover:bg-red-50 text-red-600 text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
         >
           {stopLoading ? '중단 중...' : '⏹ 중단'}
         </button>
@@ -148,42 +130,30 @@ export default function ProgressSection() {
       {/* Loss 차트 */}
       {chartData.length > 1 && (
         <div>
-          <p className="text-xs text-gray-500 mb-1">Loss 추이</p>
-          <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-              <XAxis
-                dataKey="step"
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v: number) => v.toLocaleString()}
-              />
-              <YAxis
-                tick={{ fontSize: 10 }}
-                width={54}
-                tickFormatter={(v: number) => v.toFixed(3)}
-              />
-              <Tooltip
-                contentStyle={{ fontSize: 11 }}
-                formatter={(v: number) => [v.toFixed(6), 'loss']}
-                labelFormatter={(l: number) => `step ${l.toLocaleString()}`}
-              />
-              <Line
-                type="monotone"
-                dataKey="loss"
-                stroke="#3b82f6"
-                dot={false}
-                strokeWidth={1.5}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <p className="text-xs font-medium text-slate-500 mb-2">Loss 추이</p>
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                <XAxis dataKey="step" tick={{ fontSize: 10 }} tickFormatter={(v: number) => v.toLocaleString()} />
+                <YAxis tick={{ fontSize: 10 }} width={54} tickFormatter={(v: number) => v.toFixed(3)} />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                  formatter={(v: number) => [v.toFixed(6), 'loss']}
+                  labelFormatter={(l: number) => `step ${l.toLocaleString()}`}
+                />
+                <Line type="monotone" dataKey="loss" stroke="#0ea5e9" dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
       {/* 로그 */}
       <div>
-        <p className="text-xs text-gray-500 mb-1">로그</p>
+        <p className="text-xs font-medium text-slate-500 mb-2">로그</p>
         <pre
           ref={logRef}
-          className="bg-gray-900 text-gray-100 text-xs font-mono p-3 rounded h-40 overflow-y-auto whitespace-pre-wrap leading-5"
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-mono p-4 rounded-xl h-40 overflow-y-auto whitespace-pre-wrap leading-5"
         >
           {log_lines.length > 0 ? log_lines.join('\n') : '(로그 없음)'}
         </pre>

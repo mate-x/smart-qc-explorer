@@ -33,11 +33,13 @@ export default function Tab2Config() {
   const [preConfig, setPreConfig] = useState<PreprocessingConfig>(DEFAULT_PRE);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  const [isGpu, setIsGpu] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -46,14 +48,15 @@ export default function Tab2Config() {
         const { preprocessing_config, model_config, device_info } = res.data;
         if (preprocessing_config) setPreConfig(preprocessing_config);
         if (model_config) setModelConfig(model_config);
-        const label =
-          device_info.device === 'cuda' && device_info.gpu_name
-            ? `CUDA — ${device_info.gpu_name}${device_info.vram_gb ? ` (${device_info.vram_gb} GB)` : ''}`
-            : 'CPU';
+        const gpu = device_info.device === 'cuda';
+        const label = gpu && device_info.gpu_name
+          ? `${device_info.gpu_name}${device_info.vram_gb ? ` · ${device_info.vram_gb} GB` : ''}`
+          : 'CPU 모드';
         setDeviceLabel(label);
+        setIsGpu(gpu);
         setDeviceInfo(device_info);
       } catch {
-        // 설정 없음 — 기본값 사용
+        // 기본값 사용
       } finally {
         setLoading(false);
       }
@@ -70,8 +73,7 @@ export default function Tab2Config() {
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 3000);
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       setSaveError(
         typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '저장 실패',
       );
@@ -80,48 +82,69 @@ export default function Tab2Config() {
     }
   }
 
-  if (loading) return <div className="p-4 text-sm text-gray-500">로딩 중...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <span className="text-sm text-slate-400 animate-pulse">설정 로딩 중...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
-      {/* 디바이스 정보 */}
-      {deviceLabel && (
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span
-            className={`inline-block w-2 h-2 rounded-full ${
-              deviceLabel.startsWith('CUDA') ? 'bg-green-500' : 'bg-gray-400'
-            }`}
-          />
-          {deviceLabel}
-        </div>
-      )}
-
-      {/* 전처리 설정 */}
-      <div className="border border-gray-200 rounded-lg p-4">
-        <PreprocessingForm value={preConfig} onChange={setPreConfig} />
-      </div>
-
-      {/* 모델 설정 */}
-      <div className="border border-gray-200 rounded-lg p-4">
-        <ModelConfigForm value={modelConfig} onChange={setModelConfig} />
-      </div>
-
-      {/* 저장 버튼 */}
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-4">
+      {/* 상단 바: 디바이스 + 저장 */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3 flex items-center gap-4">
+        {deviceLabel && (
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${isGpu ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+            <span className="text-xs font-medium text-slate-600">{deviceLabel}</span>
+          </div>
+        )}
+        <div className="flex-1" />
+        {saveOk && (
+          <span className="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+            저장 완료
+          </span>
+        )}
+        {saveError && (
+          <span className="text-xs text-red-600">{saveError}</span>
+        )}
         <button
           onClick={handleSave}
           disabled={saveLoading}
-          className="px-5 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+          className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer whitespace-nowrap"
         >
-          {saveLoading ? '저장 중...' : '저장'}
+          {saveLoading ? '저장 중...' : '설정 저장'}
         </button>
-        {saveOk && <span className="text-sm text-green-600">저장 완료</span>}
-        {saveError && <p className="mt-1 text-red-600 text-[13px]">{saveError}</p>}
       </div>
 
-      {/* 큐 */}
-      <div className="border border-gray-200 rounded-lg p-4">
-        <QueueSection preprocessingConfig={preConfig} modelConfig={modelConfig} />
+      {/* 2열: 전처리 | 모델 */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <PreprocessingForm value={preConfig} onChange={setPreConfig} />
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <ModelConfigForm value={modelConfig} onChange={setModelConfig} />
+        </div>
+      </div>
+
+      {/* 학습 대기열 (아코디언) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setQueueOpen(o => !o)}
+          className="w-full flex items-center gap-2 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer"
+        >
+          <span className="text-slate-400 text-xs">{queueOpen ? '▾' : '▸'}</span>
+          학습 대기열 관리
+        </button>
+        {queueOpen && (
+          <div className="px-5 pb-5 border-t border-slate-100">
+            <div className="pt-4">
+              <QueueSection preprocessingConfig={preConfig} modelConfig={modelConfig} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

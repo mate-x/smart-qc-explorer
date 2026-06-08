@@ -6,13 +6,10 @@ import { useExperimentsStore } from '../store/experimentsStore';
 import { useAnomalyMapStore } from '../store/anomalyMapStore';
 import type { Experiment } from '../types/experiments';
 import type { AnomalyMapImagesResponse, AnomalyMapStatus } from '../types/anomalyMap';
-import BuildSection from '../components/tab5/BuildSection';
 import ControlBar from '../components/tab5/ControlBar';
 import ImageGrid from '../components/tab5/ImageGrid';
 import ExportSection from '../components/tab5/ExportSection';
 
-// Streamlit Tab5와 동일한 초기 threshold 계산:
-// threshold_method/threshold_value → raw threshold → min-max 정규화 → 슬라이더 초기값
 function sortedPercentile(sorted: number[], p: number): number {
   const idx = (p / 100) * (sorted.length - 1);
   const lo = Math.floor(idx);
@@ -25,14 +22,11 @@ function computeInitialThreshold(exp: Experiment): number {
   const scores = exp.metrics?.anomaly_scores ?? [];
   const labels = exp.metrics?.image_labels ?? [];
   if (scores.length === 0) return 0.5;
-
   const sMin = Math.min(...scores);
   const sMax = Math.max(...scores);
   if (sMax <= sMin) return 0.5;
-
   const method = exp.threshold_method ?? 'percentile';
   const value = exp.threshold_value ?? 95.0;
-
   let rawThr: number;
   if (method === 'absolute') {
     rawThr = value;
@@ -40,7 +34,6 @@ function computeInitialThreshold(exp: Experiment): number {
     const normalSorted = scores.filter((_, i) => labels[i] === 0).sort((a, b) => a - b);
     rawThr = normalSorted.length > 0 ? sortedPercentile(normalSorted, value) : value;
   }
-
   return Math.round(Math.max(0, Math.min(1, (rawThr - sMin) / (sMax - sMin))) * 10000) / 10000;
 }
 
@@ -73,7 +66,6 @@ export default function Tab5AnomalyMap() {
   const [imagesError, setImagesError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  // threshold 변경 → 300ms debounce + store 동기화
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedThreshold(threshold);
@@ -82,7 +74,6 @@ export default function Tab5AnomalyMap() {
     return () => clearTimeout(t);
   }, [threshold, storeThreshold]);
 
-  // 실험 정보 로드 (selectedExperimentId가 없으면 early exit)
   useEffect(() => {
     if (!selectedExperimentId) { setExpLoading(false); return; }
     setExpLoading(true);
@@ -91,7 +82,6 @@ export default function Tab5AnomalyMap() {
       .then(res => {
         const exp = res.data.find(e => e.experiment_id === selectedExperimentId) ?? null;
         setExperiment(exp);
-        // storedThreshold가 없을 때만 실험 기반 초기값 계산
         if (exp && storedThreshold == null) {
           const initTh = computeInitialThreshold(exp);
           setLocalThreshold(initTh);
@@ -102,7 +92,6 @@ export default function Tab5AnomalyMap() {
       .finally(() => setExpLoading(false));
   }, [selectedExperimentId]);
 
-  // 빌드 상태 조회
   useEffect(() => {
     if (!selectedExperimentId) return;
     getBuildStatus(selectedExperimentId)
@@ -110,7 +99,6 @@ export default function Tab5AnomalyMap() {
       .catch(() => setBuildStatus({ built: false, image_count: 0 }));
   }, [selectedExperimentId]);
 
-  // 이미지 로드 (빌드 완료 + threshold/class 변경 시)
   useEffect(() => {
     if (!selectedExperimentId || !buildStatus?.built) return;
     setImagesLoading(true);
@@ -132,7 +120,6 @@ export default function Tab5AnomalyMap() {
       .finally(() => setImagesLoading(false));
   }, [selectedExperimentId, buildStatus?.built, debouncedThreshold, selectedClass]);
 
-  // 빌드 실행 + 완료까지 폴링
   async function handleBuild() {
     if (!selectedExperimentId) return;
     setBuilding(true);
@@ -150,7 +137,6 @@ export default function Tab5AnomalyMap() {
       }
       const newStatus = await getBuildStatus(selectedExperimentId);
       setBuildStatus(newStatus.data);
-      // 이미지 로드는 buildStatus 변경 useEffect가 자동 처리
     } catch (e: unknown) {
       setBuildError(extractError(e));
     } finally {
@@ -158,83 +144,119 @@ export default function Tab5AnomalyMap() {
     }
   }
 
-  // ── 가드 및 로딩 상태 ──────────────────────────────────────────────────────
-
+  // 실험 미선택 빈 상태
   if (!selectedExperimentId) {
     return (
-      <div className="p-4 flex flex-col gap-3">
-        <p className="text-sm text-gray-500">Tab4에서 실험을 선택한 후 이 탭을 사용하세요.</p>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 flex flex-col items-center gap-4">
+        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-xl">🗺️</div>
+        <div className="text-center">
+          <p className="text-sm font-medium text-slate-700">실험을 먼저 선택해 주세요</p>
+          <p className="text-xs text-slate-400 mt-1">실험 히스토리 탭에서 분석할 실험을 선택하면 Anomaly Map을 볼 수 있습니다.</p>
+        </div>
         <button
           onClick={() => navigate('/experiments')}
-          className="px-3 py-1.5 border border-gray-300 text-sm rounded hover:bg-gray-50 w-fit cursor-pointer"
+          className="px-5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors cursor-pointer"
         >
-          ← 실험 목록으로
+          ← 실험 히스토리로
         </button>
       </div>
     );
   }
 
-  if (expLoading) return <div className="p-4 text-sm text-gray-500">로딩 중...</div>;
-  if (expError) return <div className="p-4 text-sm text-red-600">{expError}</div>;
+  if (expLoading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <span className="text-sm text-slate-400 animate-pulse">로딩 중...</span>
+      </div>
+    );
+  }
+  if (expError) {
+    return <div className="bg-red-50 border border-red-200 rounded-2xl p-5 text-sm text-red-600">{expError}</div>;
+  }
 
   return (
-    <div className="p-4 flex flex-col gap-4 overflow-auto h-full">
+    <div className="flex flex-col gap-5">
       {/* 헤더 */}
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => navigate('/experiments')}
-          className="text-xs text-blue-600 hover:underline cursor-pointer"
+          className="text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
         >
-          ← Tab4 실험 목록
+          ← 실험 히스토리
         </button>
         {experiment && (
-          <h2 className="text-sm font-semibold text-gray-700">
+          <span className="text-sm font-semibold text-slate-800">
             Anomaly Map — {experiment.name}
-          </h2>
+          </span>
         )}
       </div>
 
       {/* 빌드 섹션 */}
-      <BuildSection
-        built={buildStatus?.built ?? false}
-        imageCount={buildStatus?.image_count ?? 0}
-        building={building}
-        buildError={buildError}
-        onBuild={handleBuild}
-      />
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div className="flex items-center gap-4 flex-wrap">
+          {buildStatus?.built ? (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-sm font-medium text-slate-700">
+                Anomaly Map 생성 완료
+                <span className="ml-2 text-xs text-slate-400 font-normal">({buildStatus.image_count}개 이미지)</span>
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm text-slate-500">Anomaly Map이 아직 생성되지 않았습니다.</span>
+          )}
+          <div className="flex-1" />
+          <button
+            onClick={handleBuild}
+            disabled={building}
+            className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 whitespace-nowrap transition-colors cursor-pointer"
+          >
+            {building ? '생성 중...' : buildStatus?.built ? '재생성' : 'Anomaly Map 생성'}
+          </button>
+          {building && (
+            <span className="text-xs text-slate-400 animate-pulse">모델 추론 중, 잠시 기다려 주세요...</span>
+          )}
+        </div>
+        {buildError && (
+          <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{buildError}</p>
+        )}
+      </div>
 
-      {/* 컨트롤 + 이미지 (빌드 완료 시만) */}
+      {/* 컨트롤 + 이미지 */}
       {buildStatus?.built && (
         <>
-          <hr className="border-gray-200" />
-          <ControlBar
-            threshold={threshold}
-            onThresholdChange={setLocalThreshold}
-            defectClasses={defectClasses}
-            selectedClass={selectedClass}
-            onClassChange={setSelectedClass}
-          />
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <ControlBar
+              threshold={threshold}
+              onThresholdChange={setLocalThreshold}
+              defectClasses={defectClasses}
+              selectedClass={selectedClass}
+              onClassChange={setSelectedClass}
+            />
+          </div>
 
-          {imagesLoading ? (
-            <p className="text-sm text-gray-400 animate-pulse">이미지 로딩 중...</p>
-          ) : imagesError ? (
-            <p className="text-sm text-red-600">{imagesError}</p>
-          ) : imagesData ? (
-            <>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            {imagesLoading ? (
+              <p className="text-sm text-slate-400 animate-pulse">이미지 로딩 중...</p>
+            ) : imagesError ? (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{imagesError}</p>
+            ) : imagesData ? (
               <ImageGrid
                 imagesData={imagesData}
                 expId={selectedExperimentId}
                 page={page}
                 onPageChange={setPage}
               />
-              <hr className="border-gray-200" />
-              <ExportSection
-                expId={selectedExperimentId}
-                threshold={debouncedThreshold}
-                defectClass={selectedClass}
-              />
-            </>
-          ) : null}
+            ) : null}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <ExportSection
+              expId={selectedExperimentId}
+              threshold={debouncedThreshold}
+              defectClass={selectedClass}
+            />
+          </div>
         </>
       )}
     </div>

@@ -10,17 +10,17 @@ const TABS = [
 
 export function TabBar() {
   return (
-    <nav className="flex border-b border-gray-200 bg-white px-2 shrink-0">
+    <nav className="flex border-b border-slate-200 bg-slate-50 px-2 shrink-0">
       {TABS.map(({ to, label }) => (
         <NavLink
           key={to}
           to={to}
           end={to === '/'}
           className={({ isActive }) =>
-            `px-4 py-3 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+            `px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
               isActive
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                ? 'border-slate-800 text-slate-900'
+                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-400'
             }`
           }
         >

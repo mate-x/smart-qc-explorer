@@ -24,35 +24,31 @@ export const DEFAULT_EFFICIENTAD: EfficientAdParamsState = {
   min_delta: 0.001,
 };
 
+const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow';
+const selectCls = inputCls + ' cursor-pointer';
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function NumInput({ value, onChange, min, max, step }: {
+  value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number;
+}) {
+  return (
+    <input type="number" value={value} min={min} max={max} step={step}
+      onChange={(e) => onChange(parseFloat(e.target.value))}
+      className={inputCls} />
+  );
+}
+
 interface Props {
   value: EfficientAdParamsState;
   onChange: (v: EfficientAdParamsState) => void;
-}
-
-function NumInput({
-  value,
-  onChange,
-  min,
-  max,
-  step,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-}) {
-  return (
-    <input
-      type="number"
-      value={value}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(e) => onChange(parseFloat(e.target.value))}
-      className="w-28 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-400"
-    />
-  );
 }
 
 export default function EfficientAdParams({ value, onChange }: Props) {
@@ -63,232 +59,153 @@ export default function EfficientAdParams({ value, onChange }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {/* 기본 파라미터 */}
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-3">
-          <label className="w-28 shrink-0 text-xs text-gray-600">Model Size</label>
-          <select
-            value={value.model_size}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+        <Field label="Model Size">
+          <select value={value.model_size}
             onChange={(e) => set('model_size', e.target.value as 'small' | 'medium')}
-            className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-400"
-          >
+            className={selectCls}>
             <option value="small">small</option>
             <option value="medium">medium</option>
           </select>
-        </div>
+        </Field>
 
-        <div className="flex items-center gap-3">
-          <label className="w-28 shrink-0 text-xs text-gray-600">Train Steps</label>
-          <NumInput
-            value={value.train_steps}
+        <Field label="Train Steps">
+          <NumInput value={value.train_steps}
             onChange={(v) => set('train_steps', Math.round(v))}
-            min={1000}
-            max={200000}
-            step={1000}
-          />
-        </div>
+            min={1000} max={200000} step={1000} />
+        </Field>
 
-        <div className="flex items-center gap-3">
-          <label className="w-28 shrink-0 text-xs text-gray-600">Early Stopping</label>
-          <input
-            type="checkbox"
-            checked={value.early_stopping}
-            onChange={(e) => set('early_stopping', e.target.checked)}
-            className="w-4 h-4 cursor-pointer"
-          />
-        </div>
-
-        {value.early_stopping && (
-          <>
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">Patience (steps)</label>
-              <NumInput
-                value={value.patience}
-                onChange={(v) => set('patience', Math.round(v))}
-                min={100}
-                max={200000}
-                step={500}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">Min Delta</label>
-              <NumInput
-                value={value.min_delta}
-                onChange={(v) => set('min_delta', v)}
-                min={0}
-                max={1}
-                step={0.001}
-              />
-            </div>
-          </>
-        )}
-
-        <div className="flex items-center gap-3">
-          <label className="w-28 shrink-0 text-xs text-gray-600">Optimizer</label>
-          <select
-            value={value.optimizer}
+        <Field label="Optimizer">
+          <select value={value.optimizer}
             onChange={(e) => set('optimizer', e.target.value as 'adam' | 'adamw' | 'sgd')}
-            className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-400"
-          >
+            className={selectCls}>
             <option value="adam">adam</option>
             <option value="adamw">adamw</option>
             <option value="sgd">sgd</option>
           </select>
-        </div>
+        </Field>
 
-        <div className="flex items-center gap-3">
-          <label className="w-28 shrink-0 text-xs text-gray-600">Learning Rate</label>
-          <NumInput
-            value={value.learning_rate}
+        <Field label="Learning Rate">
+          <NumInput value={value.learning_rate}
             onChange={(v) => set('learning_rate', v)}
-            min={0.000001}
-            max={0.1}
-            step={0.0001}
-          />
-        </div>
+            min={0.000001} max={0.1} step={0.0001} />
+        </Field>
+
+        <Field label="Early Stopping">
+          <div className="flex items-center h-[38px]">
+            <input type="checkbox" checked={value.early_stopping}
+              onChange={(e) => set('early_stopping', e.target.checked)}
+              className="w-4 h-4 cursor-pointer accent-sky-600" />
+          </div>
+        </Field>
+
+        {value.early_stopping && (
+          <>
+            <Field label="Patience (steps)">
+              <NumInput value={value.patience}
+                onChange={(v) => set('patience', Math.round(v))}
+                min={100} max={200000} step={500} />
+            </Field>
+            <Field label="Min Delta">
+              <NumInput value={value.min_delta}
+                onChange={(v) => set('min_delta', v)}
+                min={0} max={1} step={0.001} />
+            </Field>
+          </>
+        )}
       </div>
 
-      {/* 고급 파라미터 */}
+      {/* 고급 설정 파라미터 */}
       <div>
-        <button
-          type="button"
+        <button type="button"
           onClick={() => setAdvOpen((o) => !o)}
-          className="text-xs text-gray-500 flex items-center gap-1 hover:text-gray-800 cursor-pointer"
-        >
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
           <span>{advOpen ? '▾' : '▸'}</span>
           고급 설정
         </button>
 
         {advOpen && (
-          <div className="mt-2 flex flex-col gap-2.5 pl-2 border-l border-gray-200">
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">Weight Decay</label>
-              <NumInput
-                value={value.weight_decay}
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-4 pl-3 border-l-2 border-slate-100">
+            <Field label="Weight Decay">
+              <NumInput value={value.weight_decay}
                 onChange={(v) => set('weight_decay', v)}
-                min={0}
-                max={0.1}
-                step={0.00001}
-              />
-            </div>
+                min={0} max={0.1} step={0.00001} />
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">Out Channels</label>
-              <select
-                value={value.out_channels}
-                onChange={(e) =>
-                  set('out_channels', parseInt(e.target.value, 10) as 128 | 256 | 384 | 512)
-                }
-                className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-400"
-              >
+            <Field label="Out Channels">
+              <select value={value.out_channels}
+                onChange={(e) => set('out_channels', parseInt(e.target.value, 10) as 128 | 256 | 384 | 512)}
+                className={selectCls}>
                 <option value={128}>128</option>
                 <option value={256}>256</option>
                 <option value={384}>384</option>
                 <option value={512}>512</option>
               </select>
-            </div>
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">Padding</label>
-              <input
-                type="checkbox"
-                checked={value.padding}
-                onChange={(e) => set('padding', e.target.checked)}
-                className="w-4 h-4 cursor-pointer"
-              />
-            </div>
+            <Field label="Padding">
+              <div className="flex items-center h-[38px]">
+                <input type="checkbox" checked={value.padding}
+                  onChange={(e) => set('padding', e.target.checked)}
+                  className="w-4 h-4 cursor-pointer accent-sky-600" />
+              </div>
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">AE Loss Weight</label>
-              <NumInput
-                value={value.ae_loss_weight}
+            <Field label="AE Loss Weight">
+              <NumInput value={value.ae_loss_weight}
                 onChange={(v) => set('ae_loss_weight', v)}
-                min={0}
-                max={1}
-                step={0.1}
-              />
-            </div>
+                min={0} max={1} step={0.1} />
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">AutoEncoder LR</label>
-              <NumInput
-                value={value.autoencoder_lr}
+            <Field label="AutoEncoder LR">
+              <NumInput value={value.autoencoder_lr}
                 onChange={(v) => set('autoencoder_lr', v)}
-                min={0.000001}
-                max={0.1}
-                step={0.00001}
-              />
-            </div>
+                min={0.000001} max={0.1} step={0.00001} />
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">AE Weight Decay</label>
-              <NumInput
-                value={value.autoencoder_weight_decay}
+            <Field label="AE Weight Decay">
+              <NumInput value={value.autoencoder_weight_decay}
                 onChange={(v) => set('autoencoder_weight_decay', v)}
-                min={0}
-                max={0.1}
-                step={0.00001}
-              />
-            </div>
+                min={0} max={0.1} step={0.00001} />
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">LR Decay Steps</label>
-              <NumInput
-                value={value.lr_decay_epochs}
+            <Field label="LR Decay Steps">
+              <NumInput value={value.lr_decay_epochs}
                 onChange={(v) => set('lr_decay_epochs', Math.round(v))}
-                min={1000}
-                max={200000}
-                step={1000}
-              />
-            </div>
+                min={1000} max={200000} step={1000} />
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">LR Decay Factor</label>
-              <NumInput
-                value={value.lr_decay_factor}
+            <Field label="LR Decay Factor">
+              <NumInput value={value.lr_decay_factor}
                 onChange={(v) => set('lr_decay_factor', v)}
-                min={0.01}
-                max={1}
-                step={0.05}
-              />
-            </div>
+                min={0.01} max={1} step={0.05} />
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">Scheduler</label>
-              <select
-                value={value.scheduler}
-                onChange={(e) =>
-                  set('scheduler', e.target.value as 'StepLR' | 'CosineAnnealingLR')
-                }
-                className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-400"
-              >
+            <Field label="Scheduler">
+              <select value={value.scheduler}
+                onChange={(e) => set('scheduler', e.target.value as 'StepLR' | 'CosineAnnealingLR')}
+                className={selectCls}>
                 <option value="StepLR">StepLR</option>
                 <option value="CosineAnnealingLR">CosineAnnealingLR</option>
               </select>
-            </div>
+            </Field>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 text-xs text-gray-600">ImageNet Penalty</label>
-              <input
-                type="checkbox"
-                checked={value.use_imagenet_penalty}
-                onChange={(e) => set('use_imagenet_penalty', e.target.checked)}
-                className="w-4 h-4 cursor-pointer"
-              />
-            </div>
+            <Field label="ImageNet Penalty">
+              <div className="flex items-center h-[38px]">
+                <input type="checkbox" checked={value.use_imagenet_penalty}
+                  onChange={(e) => set('use_imagenet_penalty', e.target.checked)}
+                  className="w-4 h-4 cursor-pointer accent-sky-600" />
+              </div>
+            </Field>
 
             {value.use_imagenet_penalty && (
-              <div className="flex items-center gap-3">
-                <label className="w-28 shrink-0 text-xs text-gray-600">Penalty Batch</label>
-                <NumInput
-                  value={value.penalty_batch_size}
+              <Field label="Penalty Batch">
+                <NumInput value={value.penalty_batch_size}
                   onChange={(v) => set('penalty_batch_size', Math.round(v))}
-                  min={1}
-                  max={64}
-                  step={1}
-                />
-              </div>
+                  min={1} max={64} step={1} />
+              </Field>
             )}
           </div>
         )}
