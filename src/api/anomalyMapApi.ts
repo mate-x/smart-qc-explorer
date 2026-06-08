@@ -23,6 +23,15 @@ export const getAnomalyImages = (
 export const getTripletImageUrl = (expId: string, imagePath: string) =>
   `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/triplet`;
 
+export const getOriginalImageUrl = (expId: string, imagePath: string) =>
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/original`;
+
+export const getGtMaskImageUrl = (expId: string, imagePath: string) =>
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/gt_mask`;
+
+export const getHeatmapImageUrl = (expId: string, imagePath: string) =>
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/heatmap`;
+
 export const exportCsv = (expId: string, threshold: number, defect_class?: string) =>
   apiClient.get(`/api/anomaly-map/${expId}/export/csv`, {
     params: { threshold, ...(defect_class && defect_class !== '전체' ? { defect_class } : {}) },

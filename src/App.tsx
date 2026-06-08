@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/layout/Navbar';
+import { TabBar } from './components/layout/TabBar';
 import Tab1Dataset from './pages/Tab1Dataset';
 import Tab2Config from './pages/Tab2Config';
 import Tab3Training from './pages/Tab3Training';
@@ -12,6 +13,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <Navbar />
+      <TabBar />
       <main className="flex-1 overflow-auto p-6 bg-slate-100">
         <Routes>
           <Route path="/" element={<Tab1Dataset />} />
