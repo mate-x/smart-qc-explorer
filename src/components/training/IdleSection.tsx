@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTrainingStore } from '../../store/trainingStore';
 import { useConfigStore } from '../../store/configStore';
+import { useDatasetStore } from '../../store/datasetStore';
 import {
   startTraining,
   getCheckpoints,
@@ -24,7 +25,8 @@ function ckptProgress(c: CheckpointInfo): string {
 export default function IdleSection() {
   const { last_result, ws_error, clearLastResult, setWsError } = useTrainingStore();
   const { preprocessingConfig, modelConfig } = useConfigStore();
-  const hasConfig = !!(preprocessingConfig && modelConfig);
+  const { datasetPath } = useDatasetStore();
+  const hasConfig = !!(datasetPath && preprocessingConfig && modelConfig);
 
   const [expName, setExpName] = useState('');
   const [startLoading, setStartLoading] = useState(false);
@@ -115,7 +117,12 @@ export default function IdleSection() {
       {/* 학습 시작 */}
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold text-slate-800">학습 시작</h3>
-        {!hasConfig && (
+        {!datasetPath && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-700">
+            탭1에서 데이터셋 경로를 검증해 주세요.
+          </div>
+        )}
+        {datasetPath && !(preprocessingConfig && modelConfig) && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-700">
             전처리 / 모델 설정 탭에서 설정을 먼저 저장해 주세요.
           </div>

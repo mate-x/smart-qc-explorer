@@ -105,10 +105,11 @@ export default function ModelConfigForm({ value, onChange }: Props) {
                 <label key={m} className="flex items-center gap-1.5 text-sm cursor-pointer">
                   <input type="radio" name="threshold_method" value={m}
                     checked={value.threshold_method === m}
-                    onChange={() => {
-                      set('threshold_method', m);
-                      set('threshold_value', m === 'percentile' ? 95.0 : 0.5);
-                    }}
+                    onChange={() => onChange({
+                      ...value,
+                      threshold_method: m,
+                      threshold_value: m === 'percentile' ? 95.0 : 0.5,
+                    })}
                     className="cursor-pointer accent-sky-600" />
                   <span className="text-sm text-slate-700">{m}</span>
                 </label>
@@ -117,12 +118,24 @@ export default function ModelConfigForm({ value, onChange }: Props) {
           </Field>
 
           <Field label="값">
-            <input type="number" value={value.threshold_value}
-              min={0}
-              max={value.threshold_method === 'percentile' ? 100 : 1}
-              step={value.threshold_method === 'percentile' ? 0.5 : 0.01}
-              onChange={(e) => set('threshold_value', parseFloat(e.target.value))}
-              className={inputCls} />
+            {value.threshold_method === 'percentile' ? (
+              <div className="flex items-center gap-3 h-[38px]">
+                <input
+                  type="range"
+                  value={value.threshold_value}
+                  min={0} max={100} step={0.5}
+                  onChange={(e) => set('threshold_value', parseFloat(e.target.value))}
+                  className="flex-1 accent-sky-600 cursor-pointer" />
+                <span className="text-sm text-slate-700 w-10 text-right tabular-nums">
+                  {value.threshold_value.toFixed(1)}
+                </span>
+              </div>
+            ) : (
+              <input type="number" value={value.threshold_value}
+                min={0} max={1} step={0.01}
+                onChange={(e) => set('threshold_value', parseFloat(e.target.value))}
+                className={inputCls} />
+            )}
           </Field>
         </div>
 

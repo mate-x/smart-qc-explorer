@@ -119,8 +119,8 @@ export default function ComparisonSection({ completed }: { completed: Experiment
                 ))}
               </BarChart>
             </ResponsiveContainer>
-          ) : selectedMetrics.length < 3 ? (
-            <p className="text-xs text-blue-600">레이더 차트는 메트릭을 3개 이상 선택해야 합니다.</p>
+          ) : selectedMetrics.length < 2 ? (
+            <p className="text-xs text-blue-600">레이더 차트는 메트릭을 2개 이상 선택해야 합니다.</p>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={radarData}>
