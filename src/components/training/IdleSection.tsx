@@ -24,10 +24,11 @@ function ckptProgress(c: CheckpointInfo): string {
 
 export default function IdleSection() {
   const { last_result, ws_error, clearLastResult, setWsError } = useTrainingStore();
-  const { preprocessingConfig, modelConfig } = useConfigStore();
+  const { preprocessingConfig, modelConfig, deviceInfo } = useConfigStore();
   const { datasetPath } = useDatasetStore();
   const hasConfig = !!(datasetPath && preprocessingConfig && modelConfig);
 
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [expName, setExpName] = useState('');
   const [startLoading, setStartLoading] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -117,6 +118,32 @@ export default function IdleSection() {
       {/* 학습 시작 */}
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold text-slate-800">학습 시작</h3>
+
+        {/* 현재 학습 설정 요약 */}
+        {preprocessingConfig && modelConfig && (
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setSummaryOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <span>현재 학습 설정 요약</span>
+              <span className="text-slate-400">{summaryOpen ? '▲' : '▼'}</span>
+            </button>
+            {summaryOpen && (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 px-4 py-3 text-xs text-slate-700">
+                <p><span className="text-slate-400">모델</span>&nbsp;&nbsp;{modelConfig.model_type.toUpperCase()}</p>
+                <p><span className="text-slate-400">전처리</span>&nbsp;&nbsp;{preprocessingConfig.method}</p>
+                <p><span className="text-slate-400">이미지 크기</span>&nbsp;&nbsp;{preprocessingConfig.image_size}px</p>
+                <p><span className="text-slate-400">Threshold</span>&nbsp;&nbsp;{modelConfig.threshold_method} ({modelConfig.threshold_value})</p>
+                <p><span className="text-slate-400">배치 크기</span>&nbsp;&nbsp;{modelConfig.batch_size}</p>
+                <p><span className="text-slate-400">디바이스</span>&nbsp;&nbsp;{deviceInfo?.device.toUpperCase() ?? '—'}</p>
+                <p><span className="text-slate-400">랜덤 시드</span>&nbsp;&nbsp;{modelConfig.random_seed}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {!datasetPath && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-700">
             탭1에서 데이터셋 경로를 검증해 주세요.
@@ -127,22 +154,27 @@ export default function IdleSection() {
             전처리 / 모델 설정 탭에서 설정을 먼저 저장해 주세요.
           </div>
         )}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={expName}
-            onChange={(e) => setExpName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && hasConfig && !startLoading && handleStart()}
-            placeholder="실험명 (선택)"
-            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
-          />
-          <button
-            onClick={handleStart}
-            disabled={!hasConfig || startLoading}
-            className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 whitespace-nowrap transition-colors cursor-pointer"
-          >
-            {startLoading ? '시작 중...' : '▶ 학습 시작'}
-          </button>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-slate-500">
+            실험명 <span className="font-normal text-slate-400">(비워두면 자동 생성)</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={expName}
+              onChange={(e) => setExpName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && hasConfig && !startLoading && handleStart()}
+              placeholder="예: EfficientAD CLAHE clip2.0 실험"
+              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
+            />
+            <button
+              onClick={handleStart}
+              disabled={!hasConfig || startLoading}
+              className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 whitespace-nowrap transition-colors cursor-pointer"
+            >
+              {startLoading ? '시작 중...' : '▶ 학습 시작'}
+            </button>
+          </div>
         </div>
         {startError && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{startError}</p>
