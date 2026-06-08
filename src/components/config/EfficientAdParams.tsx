@@ -60,7 +60,7 @@ export default function EfficientAdParams({ value, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 기본 파라미터 */}
+      {/* 기본 파라미터 — Streamlit col1/col2 순서: model_size|lr, train_steps|wd, optimizer|padding, out_channels|early_stopping */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
         <Field label="Model Size">
           <select value={value.model_size}
@@ -71,10 +71,22 @@ export default function EfficientAdParams({ value, onChange }: Props) {
           </select>
         </Field>
 
+        <Field label="Learning Rate">
+          <NumInput value={value.learning_rate}
+            onChange={(v) => set('learning_rate', v)}
+            min={0.000001} max={0.1} step={0.0001} />
+        </Field>
+
         <Field label="Train Steps">
           <NumInput value={value.train_steps}
             onChange={(v) => set('train_steps', Math.round(v))}
             min={1000} max={200000} step={1000} />
+        </Field>
+
+        <Field label="Weight Decay">
+          <NumInput value={value.weight_decay}
+            onChange={(v) => set('weight_decay', v)}
+            min={0} max={0.1} step={0.00001} />
         </Field>
 
         <Field label="Optimizer">
@@ -87,10 +99,23 @@ export default function EfficientAdParams({ value, onChange }: Props) {
           </select>
         </Field>
 
-        <Field label="Learning Rate">
-          <NumInput value={value.learning_rate}
-            onChange={(v) => set('learning_rate', v)}
-            min={0.000001} max={0.1} step={0.0001} />
+        <Field label="Padding">
+          <div className="flex items-center h-[38px]">
+            <input type="checkbox" checked={value.padding}
+              onChange={(e) => set('padding', e.target.checked)}
+              className="w-4 h-4 cursor-pointer accent-sky-600" />
+          </div>
+        </Field>
+
+        <Field label="Out Channels">
+          <select value={value.out_channels}
+            onChange={(e) => set('out_channels', parseInt(e.target.value, 10) as 128 | 256 | 384 | 512)}
+            className={selectCls}>
+            <option value={128}>128</option>
+            <option value={256}>256</option>
+            <option value={384}>384</option>
+            <option value={512}>512</option>
+          </select>
         </Field>
 
         <Field label="Early Stopping">
@@ -117,7 +142,22 @@ export default function EfficientAdParams({ value, onChange }: Props) {
         )}
       </div>
 
-      {/* 고급 설정 파라미터 */}
+      {/* AE Loss Weight — expander 바깥 별도 슬라이더 (Streamlit 동일) */}
+      <Field label="AE Loss Weight (α)">
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            value={value.ae_loss_weight}
+            min={0} max={1} step={0.01}
+            onChange={(e) => set('ae_loss_weight', parseFloat(e.target.value))}
+            className="flex-1 accent-sky-600 cursor-pointer" />
+          <span className="text-sm text-slate-700 w-10 text-right tabular-nums">
+            {value.ae_loss_weight.toFixed(2)}
+          </span>
+        </div>
+      </Field>
+
+      {/* 고급 설정 */}
       <div>
         <button type="button"
           onClick={() => setAdvOpen((o) => !o)}
@@ -128,37 +168,6 @@ export default function EfficientAdParams({ value, onChange }: Props) {
 
         {advOpen && (
           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-4 pl-3 border-l-2 border-slate-100">
-            <Field label="Weight Decay">
-              <NumInput value={value.weight_decay}
-                onChange={(v) => set('weight_decay', v)}
-                min={0} max={0.1} step={0.00001} />
-            </Field>
-
-            <Field label="Out Channels">
-              <select value={value.out_channels}
-                onChange={(e) => set('out_channels', parseInt(e.target.value, 10) as 128 | 256 | 384 | 512)}
-                className={selectCls}>
-                <option value={128}>128</option>
-                <option value={256}>256</option>
-                <option value={384}>384</option>
-                <option value={512}>512</option>
-              </select>
-            </Field>
-
-            <Field label="Padding">
-              <div className="flex items-center h-[38px]">
-                <input type="checkbox" checked={value.padding}
-                  onChange={(e) => set('padding', e.target.checked)}
-                  className="w-4 h-4 cursor-pointer accent-sky-600" />
-              </div>
-            </Field>
-
-            <Field label="AE Loss Weight">
-              <NumInput value={value.ae_loss_weight}
-                onChange={(v) => set('ae_loss_weight', v)}
-                min={0} max={1} step={0.1} />
-            </Field>
-
             <Field label="AutoEncoder LR">
               <NumInput value={value.autoencoder_lr}
                 onChange={(v) => set('autoencoder_lr', v)}

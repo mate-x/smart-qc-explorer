@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { PreprocessingConfig, ModelConfig } from '../types/config';
 import { getConfig, saveConfig } from '../api/configApi';
 import { useConfigStore } from '../store/configStore';
+import { useDatasetStore } from '../store/datasetStore';
 import PreprocessingForm from '../components/config/PreprocessingForm';
 import ModelConfigForm from '../components/config/ModelConfigForm';
 import QueueSection from '../components/config/QueueSection';
@@ -29,6 +30,7 @@ const DEFAULT_MODEL: ModelConfig = {
 
 export default function Tab2Config() {
   const { setConfigs, setDeviceInfo } = useConfigStore();
+  const { datasetMeta } = useDatasetStore();
 
   const [preConfig, setPreConfig] = useState<PreprocessingConfig>(DEFAULT_PRE);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL);
@@ -64,6 +66,10 @@ export default function Tab2Config() {
   }, []);
 
   async function handleSave() {
+    if (preConfig.image_size % 32 !== 0) {
+      setSaveError('이미지 크기가 32의 배수가 아닙니다. 수정 후 저장해 주세요.');
+      return;
+    }
     setSaveLoading(true);
     setSaveError(null);
     setSaveOk(false);
@@ -86,6 +92,15 @@ export default function Tab2Config() {
     return (
       <div className="flex items-center justify-center h-48">
         <span className="text-sm text-slate-400 animate-pulse">설정 로딩 중...</span>
+      </div>
+    );
+  }
+
+  if (!datasetMeta) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 flex flex-col items-center gap-3 text-center">
+        <p className="text-sm font-medium text-amber-800">데이터셋을 먼저 검증해 주세요</p>
+        <p className="text-xs text-amber-600">탭1에서 데이터셋 경로를 입력하고 검증을 완료해야 설정 탭을 사용할 수 있습니다.</p>
       </div>
     );
   }

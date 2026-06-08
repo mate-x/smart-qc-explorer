@@ -126,9 +126,12 @@ export default function PreprocessingForm({ value, onChange }: Props) {
             <input type="number" min={32} max={1024} step={32}
               value={value.image_size}
               onChange={(e) => set('image_size', parseInt(e.target.value, 10))}
-              className={inputCls} />
+              className={`${inputCls} ${value.image_size % 32 !== 0 ? 'border-red-400 focus:ring-red-400 focus:border-red-400' : ''}`} />
             <span className="text-xs text-slate-400 whitespace-nowrap">px</span>
           </div>
+          {value.image_size % 32 !== 0 && (
+            <p className="text-xs text-red-500 mt-1">32의 배수만 입력 가능합니다.</p>
+          )}
         </Field>
       </div>
     </div>

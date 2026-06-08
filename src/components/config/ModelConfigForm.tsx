@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import type { ModelConfig } from '../../types/config';
 import type { EfficientAdParamsState, PatchCoreParamsState } from '../../types/modelParams';
 import EfficientAdParams, { DEFAULT_EFFICIENTAD } from './EfficientAdParams';
 import PatchCoreParams, { DEFAULT_PATCHCORE } from './PatchCoreParams';
-import { previewThreshold } from '../../api/configApi';
 
 interface Props {
   value: ModelConfig;
@@ -21,11 +19,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default function ModelConfigForm({ value, onChange }: Props) {
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [preview, setPreview] = useState<{ normal: number; defect: number } | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+function computeThresholdRatio(method: string, value: number): { normal: number; defect: number } | null {
+  if (method === 'percentile') {
+    const normal = Math.round((value / 100) * 1e6) / 1e6;
+    const defect = Math.round((1 - value / 100) * 1e6) / 1e6;
+    return { normal, defect };
+  }
+  return null;
+}
 
+export default function ModelConfigForm({ value, onChange }: Props) {
   function set<K extends keyof ModelConfig>(key: K, val: ModelConfig[K]) {
     onChange({ ...value, [key]: val });
   }
@@ -36,32 +39,9 @@ export default function ModelConfigForm({ value, onChange }: Props) {
       model_type: mt,
       params: mt === 'efficientad' ? DEFAULT_EFFICIENTAD : DEFAULT_PATCHCORE,
     });
-    setPreview(null);
   }
 
-  async function handlePreview() {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      const res = await previewThreshold(value.threshold_method, value.threshold_value);
-      const { normal_ratio, defect_ratio } = res.data;
-      if (normal_ratio != null && defect_ratio != null) {
-        setPreview({ normal: normal_ratio, defect: defect_ratio });
-      } else {
-        setPreviewError('학습 완료 실험이 없어 미리보기를 계산할 수 없습니다.');
-      }
-    } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setPreviewError(
-        typeof detail === 'string'
-          ? detail
-          : (e as { message?: string })?.message ?? '미리보기 실패',
-      );
-    } finally {
-      setPreviewLoading(false);
-    }
-  }
+  const thresholdRatio = computeThresholdRatio(value.threshold_method, value.threshold_value);
 
   return (
     <div className="flex flex-col gap-5">
@@ -128,7 +108,6 @@ export default function ModelConfigForm({ value, onChange }: Props) {
                     onChange={() => {
                       set('threshold_method', m);
                       set('threshold_value', m === 'percentile' ? 95.0 : 0.5);
-                      setPreview(null);
                     }}
                     className="cursor-pointer accent-sky-600" />
                   <span className="text-sm text-slate-700">{m}</span>
@@ -138,33 +117,30 @@ export default function ModelConfigForm({ value, onChange }: Props) {
           </Field>
 
           <Field label="값">
-            <div className="flex gap-2">
-              <input type="number" value={value.threshold_value}
-                min={0}
-                max={value.threshold_method === 'percentile' ? 100 : 1}
-                step={value.threshold_method === 'percentile' ? 0.5 : 0.01}
-                onChange={(e) => {
-                  set('threshold_value', parseFloat(e.target.value));
-                  setPreview(null);
-                }}
-                className={inputCls} />
-              <button type="button" onClick={handlePreview} disabled={previewLoading}
-                className="px-3 py-2 border border-slate-200 text-xs text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap transition-colors cursor-pointer">
-                {previewLoading ? '...' : '미리보기'}
-              </button>
-            </div>
+            <input type="number" value={value.threshold_value}
+              min={0}
+              max={value.threshold_method === 'percentile' ? 100 : 1}
+              step={value.threshold_method === 'percentile' ? 0.5 : 0.01}
+              onChange={(e) => set('threshold_value', parseFloat(e.target.value))}
+              className={inputCls} />
           </Field>
         </div>
 
-        {preview && (
-          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-            정상 {(preview.normal * 100).toFixed(1)}% 정상 판정 ·{' '}
-            결함 {(preview.defect * 100).toFixed(1)}% 정상 판정
-          </p>
-        )}
-        {previewError && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            {previewError}
+        {/* 비율 미리보기 — 로컬 자동 계산 (Streamlit 동일) */}
+        {thresholdRatio ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <p className="text-[10px] text-slate-400 mb-0.5">예상 정상 판정 비율</p>
+              <p className="text-sm font-semibold text-slate-700">{(thresholdRatio.normal * 100).toFixed(1)}%</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <p className="text-[10px] text-slate-400 mb-0.5">예상 결함 판정 비율</p>
+              <p className="text-sm font-semibold text-slate-700">{(thresholdRatio.defect * 100).toFixed(1)}%</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+            absolute 방식은 학습 완료 후 실제 점수 분포에서 확인 가능합니다.
           </p>
         )}
       </div>
