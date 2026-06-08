@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import type { PreprocessingConfig } from '../../types/config';
+import { previewPreprocessing } from '../../api/configApi';
+import type { PreviewImageResponse } from '../../types/config';
 
 interface Props {
   value: PreprocessingConfig;
   onChange: (v: PreprocessingConfig) => void;
+  datasetPath: string | null;
 }
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow';
@@ -17,7 +21,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default function PreprocessingForm({ value, onChange }: Props) {
+export default function PreprocessingForm({ value, onChange, datasetPath }: Props) {
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<PreviewImageResponse | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
   function set<K extends keyof PreprocessingConfig>(key: K, val: PreprocessingConfig[K]) {
     onChange({ ...value, [key]: val });
   }
@@ -44,6 +52,32 @@ export default function PreprocessingForm({ value, onChange }: Props) {
         : null;
     onChange({ ...value, method: m, params });
   }
+
+  async function handlePreview() {
+    if (!datasetPath) return;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewData(null);
+    try {
+      const res = await previewPreprocessing(
+        datasetPath,
+        value.background_method,
+        value.method,
+        value.params as Record<string, unknown> | null,
+        value.image_size,
+      );
+      setPreviewData(res.data);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setPreviewError(
+        typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '미리보기 실패',
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  const previewDisabled = !datasetPath || previewLoading || value.image_size % 32 !== 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -140,6 +174,56 @@ export default function PreprocessingForm({ value, onChange }: Props) {
             <p className="text-xs text-red-500 mt-1">32의 배수만 입력 가능합니다.</p>
           )}
         </Field>
+      </div>
+
+      {/* 미리보기 섹션 */}
+      <div className="border-t border-slate-100 pt-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500">전처리 미리보기</span>
+          <button
+            type="button"
+            onClick={handlePreview}
+            disabled={previewDisabled}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-sky-300 text-sky-700 bg-sky-50 hover:bg-sky-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            {previewLoading ? '로딩 중...' : '미리보기'}
+          </button>
+        </div>
+
+        {!datasetPath && (
+          <p className="text-xs text-slate-400">탭1에서 데이터셋을 검증하면 미리보기가 활성화됩니다.</p>
+        )}
+
+        {previewError && (
+          <p className="text-xs text-red-500">{previewError}</p>
+        )}
+
+        {previewData?.warning && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+            {previewData.warning}
+          </div>
+        )}
+
+        {previewData && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400 text-center">원본</span>
+              <img
+                src={`data:image/png;base64,${previewData.original_b64}`}
+                alt="원본"
+                className="w-full rounded-lg border border-slate-200 object-contain"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400 text-center">전처리 후</span>
+              <img
+                src={`data:image/png;base64,${previewData.processed_b64}`}
+                alt="전처리 후"
+                className="w-full rounded-lg border border-slate-200 object-contain"
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

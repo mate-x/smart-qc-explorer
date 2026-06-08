@@ -4,6 +4,7 @@ import type {
   PreprocessingConfig,
   ModelConfig,
   ThresholdPreviewResponse,
+  PreviewImageResponse,
   QueueItem,
 } from '../types/config';
 
@@ -41,3 +42,21 @@ export const addToQueue = (
 
 export const deleteQueueItem = (itemId: string) =>
   apiClient.delete<{ success: boolean }>(`/api/queue/${itemId}`);
+
+export const reorderQueueItem = (itemId: string, direction: 'up' | 'down') =>
+  apiClient.patch<{ success: boolean }>('/api/queue/reorder', { item_id: itemId, direction });
+
+export const previewPreprocessing = (
+  dataset_path: string,
+  background_method: string,
+  method: string,
+  params: Record<string, unknown> | null,
+  image_size: number,
+) =>
+  apiClient.post<PreviewImageResponse>('/api/config/preview-image', {
+    dataset_path,
+    background_method,
+    method,
+    params,
+    image_size,
+  });

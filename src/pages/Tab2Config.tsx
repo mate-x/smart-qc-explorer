@@ -30,7 +30,7 @@ const DEFAULT_MODEL: ModelConfig = {
 
 export default function Tab2Config() {
   const { setConfigs, setDeviceInfo } = useConfigStore();
-  const { datasetMeta } = useDatasetStore();
+  const { datasetMeta, datasetPath } = useDatasetStore();
 
   const [preConfig, setPreConfig] = useState<PreprocessingConfig>(DEFAULT_PRE);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL);
@@ -136,7 +136,7 @@ export default function Tab2Config() {
       {/* 2열: 전처리 | 모델 */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <PreprocessingForm value={preConfig} onChange={setPreConfig} />
+          <PreprocessingForm value={preConfig} onChange={setPreConfig} datasetPath={datasetPath} />
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
           <ModelConfigForm value={modelConfig} onChange={setModelConfig} />

@@ -47,3 +47,9 @@ export interface ThresholdPreviewResponse {
   normal_ratio: number | null;
   defect_ratio: number | null;
 }
+
+export interface PreviewImageResponse {
+  original_b64: string;
+  processed_b64: string;
+  warning: string | null;
+}

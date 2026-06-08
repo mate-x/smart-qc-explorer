@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { PreprocessingConfig, ModelConfig, QueueItem } from '../../types/config';
-import { getQueue, addToQueue, deleteQueueItem } from '../../api/configApi';
+import { getQueue, addToQueue, deleteQueueItem, reorderQueueItem } from '../../api/configApi';
 import { useTrainingStore } from '../../store/trainingStore';
 
 interface Props {
@@ -66,6 +66,7 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reorderLoading, setReorderLoading] = useState(false);
 
   // 자동 실험 설계
   const [batchOpen, setBatchOpen] = useState(false);
@@ -113,6 +114,16 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
       const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       setDeleteError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '삭제 실패');
     }
+  }
+
+  async function handleReorder(direction: 'up' | 'down') {
+    if (!selectedId || reorderLoading) return;
+    setReorderLoading(true);
+    try {
+      await reorderQueueItem(selectedId, direction);
+      await loadQueue();
+    } catch { /* 경계 조건 등 — 버튼 비활성화로 대부분 방지됨 */ }
+    finally { setReorderLoading(false); }
   }
 
   // 자동 실험 설계 변수 목록
@@ -226,6 +237,29 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
       ) : (
         <p className="text-xs text-slate-400">대기 중인 항목이 없습니다.</p>
       )}
+
+      {/* 순서 변경 버튼 — pending 항목 선택 시에만 표시 */}
+      {(() => {
+        if (!selectedId) return null;
+        const sel = queue.find(i => i.id === selectedId);
+        if (!sel || sel.status !== 'pending') return null;
+        const pendingItems = queue.filter(i => i.status === 'pending');
+        const pendingIdx = pendingItems.findIndex(i => i.id === selectedId);
+        return (
+          <div className="flex gap-2 items-center">
+            <span className="text-xs text-slate-500">순서 변경:</span>
+            <button type="button" onClick={() => handleReorder('up')}
+              disabled={pendingIdx <= 0 || reorderLoading}
+              className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              title="위로 이동">▲</button>
+            <button type="button" onClick={() => handleReorder('down')}
+              disabled={pendingIdx >= pendingItems.length - 1 || reorderLoading}
+              className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              title="아래로 이동">▼</button>
+            {reorderLoading && <span className="text-xs text-slate-400">이동 중...</span>}
+          </div>
+        );
+      })()}
 
       {/* 선택 항목 상세 패널 */}
       {selectedId && (() => {
