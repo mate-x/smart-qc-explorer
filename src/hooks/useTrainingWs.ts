@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTrainingStore } from '../store/trainingStore';
+import { getTrainingStatus } from '../api/trainingApi';
 import type { WsMessage, TrainingStatusResponse } from '../types/training';
 
 const WS_URL = 'ws://localhost:8000/ws/training';
@@ -9,6 +10,14 @@ export function useTrainingWs() {
     let ws: WebSocket;
     let reconnectTimer: ReturnType<typeof window.setTimeout>;
     let destroyed = false;
+
+    // WS 스냅샷에만 의존하면 재연결 타이밍에 상태를 놓칠 수 있으므로
+    // HTTP로 현재 상태를 즉시 동기화한 뒤 WS를 연결한다
+    getTrainingStatus()
+      .then((res) => {
+        if (!destroyed) dispatch({ type: 'snapshot', ...res.data });
+      })
+      .catch(() => {});
 
     function connect() {
       ws = new WebSocket(WS_URL);
@@ -48,14 +57,17 @@ function dispatch(msg: WsMessage) {
       break;
 
     case 'progress':
+      if (s.status === 'idle') s.setStatus('running');
       s.updateProgress(msg.step, msg.total, msg.loss, msg.elapsed);
       break;
 
     case 'log':
+      if (s.status === 'idle') s.setStatus('running');
       s.addLog(msg.message);
       break;
 
     case 'stage':
+      if (s.status === 'idle') s.setStatus('running');
       s.setStage(msg.stage_idx, msg.stage_name);
       break;
 

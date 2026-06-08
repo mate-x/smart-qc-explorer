@@ -57,10 +57,15 @@ export const useTrainingStore = create<TrainingState>((set) => ({
     set({ ...snapshot, batch_done: 0, last_result: null, ws_error: null }),
 
   updateProgress: (step, total, loss, elapsed) =>
-    set((state) => ({
-      progress: { step, total, loss, elapsed },
-      loss_history: [...state.loss_history, { step, loss }],
-    })),
+    set((state) => {
+      const last = state.loss_history[state.loss_history.length - 1];
+      // stage가 바뀌어 step이 역행하면 last.step+1부터 이어서 단조 증가 유지
+      const globalStep = !last || step > last.step ? step : last.step + 1;
+      return {
+        progress: { step, total, loss, elapsed },
+        loss_history: [...state.loss_history, { step: globalStep, loss }],
+      };
+    }),
 
   addLog: (message) =>
     set((state) => ({
