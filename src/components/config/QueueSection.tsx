@@ -65,6 +65,7 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
   const [addError, setAddError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // 자동 실험 설계
   const [batchOpen, setBatchOpen] = useState(false);
@@ -189,7 +190,11 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
             </thead>
             <tbody className="divide-y divide-slate-100">
               {queue.filter((i) => i.status !== 'completed').map((item, idx) => (
-                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                <tr
+                  key={item.id}
+                  onClick={() => setSelectedId(prev => prev === item.id ? null : item.id)}
+                  className={`transition-colors cursor-pointer ${selectedId === item.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                >
                   <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
                   <td className="px-3 py-2 font-mono text-slate-700">{item.name}</td>
                   <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
@@ -221,6 +226,26 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
       ) : (
         <p className="text-xs text-slate-400">대기 중인 항목이 없습니다.</p>
       )}
+
+      {/* 선택 항목 상세 패널 */}
+      {selectedId && (() => {
+        const item = queue.find(i => i.id === selectedId);
+        if (!item) return null;
+        return (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-sky-800">{item.name} 상세 설정</span>
+              <button
+                onClick={() => setSelectedId(null)}
+                className="text-xs text-sky-400 hover:text-sky-700 cursor-pointer"
+              >✕</button>
+            </div>
+            <pre className="text-[11px] text-slate-700 bg-white border border-sky-100 rounded-lg p-3 overflow-auto max-h-64 leading-5">
+              {JSON.stringify({ preprocessing: item.preprocessing_config, model: item.model_config }, null, 2)}
+            </pre>
+          </div>
+        );
+      })()}
 
       {/* 현재 설정 추가 */}
       <div className="flex gap-2 items-center">

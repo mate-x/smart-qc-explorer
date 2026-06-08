@@ -111,6 +111,13 @@ export default function PreprocessingForm({ value, onChange }: Props) {
           </>
         )}
 
+        {/* he 안내 */}
+        {value.method === 'he' && (
+          <div className="col-span-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-xs text-sky-700">
+            히스토그램 평탄화(HE)는 파라미터가 없습니다.
+          </div>
+        )}
+
         {/* clahe 파라미터 */}
         {value.method === 'clahe' && (
           <Field label="clip_limit">
