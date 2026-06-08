@@ -244,6 +244,7 @@ export default function Tab5AnomalyMap() {
               <ImageGrid
                 imagesData={imagesData}
                 expId={selectedExperimentId}
+                threshold={debouncedThreshold}
                 page={page}
                 onPageChange={setPage}
               />
