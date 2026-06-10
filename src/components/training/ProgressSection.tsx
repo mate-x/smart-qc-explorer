@@ -23,7 +23,7 @@ function fmtSecs(s: number): string {
 }
 
 export default function ProgressSection() {
-  const { status, progress, loss_history, log_lines, batch_mode, batch_total, batch_done } =
+  const { status, progress, loss_history, log_lines, batch_mode, batch_total, batch_done, model_type } =
     useTrainingStore();
   const logRef = useRef<HTMLPreElement>(null);
   const [ctrlError, setCtrlError] = useState<string | null>(null);
@@ -93,7 +93,9 @@ export default function ProgressSection() {
             />
           </div>
           <div className="flex gap-5 text-xs text-slate-500">
-            <span>Loss: <span className="font-mono font-medium text-slate-800">{progress.loss.toFixed(6)}</span></span>
+            {model_type !== 'patchcore' && (
+              <span>Loss: <span className="font-mono font-medium text-slate-800">{progress.loss.toFixed(6)}</span></span>
+            )}
             <span>경과: {fmtSecs(progress.elapsed)}</span>
             {etaSecs != null && <span>예상 잔여: {fmtSecs(etaSecs)}</span>}
           </div>
@@ -128,7 +130,7 @@ export default function ProgressSection() {
       </div>
 
       {/* Loss 차트 */}
-      {chartData.length > 1 && (
+      {model_type !== 'patchcore' && chartData.length > 1 && (
         <div>
           <p className="text-xs font-medium text-slate-500 mb-2">Loss 추이</p>
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">

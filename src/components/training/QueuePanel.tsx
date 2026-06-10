@@ -22,7 +22,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default function QueuePanel() {
-  const { status, batch_mode, batch_total, batch_done, batch_queue_signal } = useTrainingStore();
+  const { status, batch_mode, batch_total, batch_done, batch_queue_signal, setCurrentModelType } = useTrainingStore();
   const { preprocessingConfig, modelConfig } = useConfigStore();
   const hasConfig = !!(preprocessingConfig && modelConfig);
 
@@ -57,7 +57,8 @@ export default function QueuePanel() {
     setBatchLoading(true);
     setBatchError(null);
     try {
-      await startBatchTraining();
+      const res = await startBatchTraining();
+      setCurrentModelType(res.data.model_type ?? null);
       setBatchPending(true);
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;

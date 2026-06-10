@@ -23,7 +23,7 @@ function ckptProgress(c: CheckpointInfo): string {
 }
 
 export default function IdleSection() {
-  const { last_result, ws_error, clearLastResult, setWsError } = useTrainingStore();
+  const { last_result, ws_error, clearLastResult, setWsError, setCurrentModelType } = useTrainingStore();
   const { preprocessingConfig, modelConfig, deviceInfo } = useConfigStore();
   const { datasetPath } = useDatasetStore();
   const hasConfig = !!(datasetPath && preprocessingConfig && modelConfig);
@@ -55,7 +55,8 @@ export default function IdleSection() {
     setStartLoading(true);
     setStartError(null);
     try {
-      await startTraining(expName.trim() || undefined);
+      const res = await startTraining(expName.trim() || undefined);
+      setCurrentModelType(res.data.model_type ?? null);
       setExpName('');
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;

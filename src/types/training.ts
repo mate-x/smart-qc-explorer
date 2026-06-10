@@ -34,6 +34,7 @@ export interface TrainingStatusResponse {
   log_lines: string[];
   loss_history: LossPoint[];
   last_ckpt_path: string | null;
+  model_type: string | null;
 }
 
 export type WsMessage =
@@ -45,7 +46,7 @@ export type WsMessage =
   | { type: 'completed'; exp_id: string; auc: number; duration_seconds: number; message: string; early_stopped: boolean }
   | { type: 'stopped'; step: number }
   | { type: 'error'; message: string; traceback: string }
-  | { type: 'batch_item_started'; exp_id: string; queue_idx: number }
+  | { type: 'batch_item_started'; exp_id: string; queue_idx: number; model_type: string }
   | { type: 'batch_item_skipped' }
   | { type: 'batch_item_error'; traceback: string }
   | { type: 'batch_stopped'; step: number }

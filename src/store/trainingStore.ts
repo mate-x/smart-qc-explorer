@@ -25,6 +25,7 @@ interface TrainingState extends TrainingStatusResponse {
   bumpQueueSignal: () => void;
   clearLastResult: () => void;
   setWsError: (msg: string | null) => void;
+  setCurrentModelType: (model_type: string | null) => void;
   reset: () => void;
 }
 
@@ -44,6 +45,7 @@ const initialState: TrainingStatusResponse & {
   log_lines: [],
   loss_history: [],
   last_ckpt_path: null,
+  model_type: null,
   batch_done: 0,
   last_result: null,
   ws_error: null,
@@ -113,6 +115,8 @@ export const useTrainingStore = create<TrainingState>((set) => ({
   clearLastResult: () => set({ last_result: null }),
 
   setWsError: (msg) => set({ ws_error: msg }),
+
+  setCurrentModelType: (model_type) => set({ model_type }),
 
   reset: () => set(initialState),
 }));
