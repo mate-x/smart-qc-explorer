@@ -19,18 +19,20 @@ export const getAnomalyImages = (
     params: { threshold, ...(defect_class && defect_class !== '전체' ? { defect_class } : {}) },
   });
 
-// image_path 형식: "{class}/{filename}"
+// image_path 형식: "{class}/{filename}" — #·공백 등 특수문자 인코딩, 슬래시는 경로 구분자로 유지
+const encodeImagePath = (p: string) => p.split('/').map(encodeURIComponent).join('/');
+
 export const getTripletImageUrl = (expId: string, imagePath: string) =>
-  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/triplet`;
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${encodeImagePath(imagePath)}/triplet`;
 
 export const getOriginalImageUrl = (expId: string, imagePath: string) =>
-  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/original`;
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${encodeImagePath(imagePath)}/original`;
 
 export const getGtMaskImageUrl = (expId: string, imagePath: string) =>
-  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/gt_mask`;
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${encodeImagePath(imagePath)}/gt_mask`;
 
 export const getHeatmapImageUrl = (expId: string, imagePath: string) =>
-  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/heatmap`;
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${encodeImagePath(imagePath)}/heatmap`;
 
 export const exportCsv = (expId: string, threshold: number, defect_class?: string) =>
   apiClient.get(`/api/anomaly-map/${expId}/export/csv`, {
