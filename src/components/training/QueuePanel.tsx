@@ -6,7 +6,7 @@ import type { QueueItem } from '../../types/config';
 import { startBatchTraining, stopBatchTraining, skipBatchItem } from '../../api/trainingApi';
 
 const STATUS_LABEL: Record<string, string> = {
-  대기중: '대기',
+  pending: '대기',
   running: '실행 중',
   completed: '완료',
   failed: '실패',
@@ -18,7 +18,7 @@ const STATUS_STYLE: Record<string, string> = {
   completed: 'text-emerald-600',
   failed: 'text-red-500',
   skipped: 'text-slate-400',
-  대기중: 'text-slate-500',
+  pending: 'text-slate-500',
 };
 
 export default function QueuePanel() {
