@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getExperiments, deleteExperiment, saveExperiment } from '../api/experimentsApi';
 import { useExperimentsStore } from '../store/experimentsStore';
@@ -25,6 +25,43 @@ export default function Tab4Experiments() {
 
   const selected = experiments.find(e => e.experiment_id === selectedExperimentId) ?? null;
   const completed = experiments.filter(e => e.status === 'completed');
+
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  function handleSort(col: string) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('desc'); }
+  }
+
+  const sortedExperiments = useMemo(() => {
+    if (!sortCol) return experiments;
+    return [...experiments].sort((a, b) => {
+      let av: unknown, bv: unknown;
+      switch (sortCol) {
+        case '실험명':    av = a.name;               bv = b.name;               break;
+        case '제품':      av = a.product_name ?? ''; bv = b.product_name ?? ''; break;
+        case '모델':      av = a.model_type;         bv = b.model_type;         break;
+        case '파라미터':  av = paramSummary(a);      bv = paramSummary(b);      break;
+        case 'Accuracy':  av = a.metrics?.accuracy;  bv = b.metrics?.accuracy;  break;
+        case 'Precision': av = a.metrics?.precision; bv = b.metrics?.precision; break;
+        case 'Recall':    av = a.metrics?.recall;    bv = b.metrics?.recall;    break;
+        case 'F1':        av = a.metrics?.f1_score;  bv = b.metrics?.f1_score;  break;
+        case 'F2':        av = a.metrics?.f2_score;  bv = b.metrics?.f2_score;  break;
+        case 'AUC':       av = a.metrics?.auc;       bv = b.metrics?.auc;       break;
+        case '실행 시각': av = a.created_at;         bv = b.created_at;         break;
+        case '상태':      av = a.status;             bv = b.status;             break;
+        default: return 0;
+      }
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv));
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [experiments, sortCol, sortDir]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,19 +154,19 @@ export default function Tab4Experiments() {
             )}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-auto max-h-[260px]">
           <table className="w-full text-xs">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-200">
-                {['실험명', '제품', '모델', '파라미터', 'Accuracy', 'Precision', 'Recall', 'F1', 'F2', 'AUC', '실행 시각', '상태'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
-                    {h}
+                {['제품', '실험명', '모델', '파라미터', 'Accuracy', 'Precision', 'Recall', 'F1', 'F2', 'AUC', '실행 시각', '상태'].map(h => (
+                  <th key={h} onClick={() => handleSort(h)} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 whitespace-nowrap cursor-pointer select-none hover:text-slate-700">
+                    {h}{sortCol === h && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {experiments.map(e => {
+              {sortedExperiments.map(e => {
                 const isSelected = e.experiment_id === selectedExperimentId;
                 const isDimmed = e.status === '중단';
                 const m = e.metrics;
@@ -140,8 +177,8 @@ export default function Tab4Experiments() {
                     onClick={() => setSelectedExperimentId(isSelected ? null : e.experiment_id)}
                     className={`cursor-pointer transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'} ${isDimmed ? 'opacity-50' : ''}`}
                   >
-                    <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{e.name}</td>
                     <td className="px-4 py-3 text-slate-500">{e.product_name || '—'}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{e.name}</td>
                     <td className="px-4 py-3 text-slate-600">{e.model_type}</td>
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{paramSummary(e)}</td>
                     <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(m?.accuracy) : '—'}</td>
@@ -201,7 +238,7 @@ export default function Tab4Experiments() {
               onClick={() => navigate('/anomaly-map')}
               className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
             >
-              이 실험으로 Anomaly Map 보기 →
+              이 실험으로 Anomaly Map 보기
             </button>
           </div>
         </div>
