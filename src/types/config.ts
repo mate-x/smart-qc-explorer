@@ -39,7 +39,7 @@ export interface QueueItem {
   name: string;
   preprocessing_config: PreprocessingConfig;
   model_config: ModelConfig;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'stopped';
   set_id?: string | null;
 }
 

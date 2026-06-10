@@ -11,6 +11,7 @@ const STATUS_LABEL: Record<string, string> = {
   completed: '완료',
   failed: '실패',
   skipped: '건너뜀',
+  stopped: '중단',
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -18,6 +19,7 @@ const STATUS_STYLE: Record<string, string> = {
   completed: 'text-emerald-600',
   failed: 'text-red-500',
   skipped: 'text-slate-400',
+  stopped: 'text-slate-400',
   pending: 'text-slate-500',
 };
 

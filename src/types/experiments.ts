@@ -20,7 +20,7 @@ export interface ExperimentMetrics {
 export interface Experiment {
   experiment_id: string;
   name: string;
-  status: 'completed' | '중단' | '실패' | '건너뜀';
+  status: 'completed' | '중단' | '실패' | '건너뜀'; // history.json 호환성 때문에 한국어 유지
   created_at: string;
   model_type: 'efficientad' | 'patchcore';
   metrics: ExperimentMetrics | null;

@@ -194,7 +194,7 @@ export default function Tab4Experiments() {
                         : e.status === '중단' ? 'bg-slate-100 text-slate-500'
                         : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {e.status === 'completed' && e.early_stopped ? '완료 (조기종료)' : e.status}
+                        {e.status === 'completed' ? (e.early_stopped ? '완료 (조기종료)' : '완료') : e.status}
                       </span>
                     </td>
                   </tr>

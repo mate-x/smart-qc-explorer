@@ -45,12 +45,22 @@ const PC_VARS = [
   { key: 'coreset_sampling_ratio', label: 'Coreset Ratio', type: 'number_list', hint: '예: 0.05,0.1' },
 ] as const;
 
+const STATUS_LABEL: Record<string, string> = {
+  pending: '대기',
+  running: '실행 중',
+  completed: '완료',
+  failed: '실패',
+  skipped: '건너뜀',
+  stopped: '중단',
+};
+
 const STATUS_COLOR: Record<string, string> = {
   pending: 'text-slate-500',
   running: 'text-sky-600 font-semibold',
   completed: 'text-emerald-600',
   failed: 'text-red-500',
   skipped: 'text-slate-400',
+  stopped: 'text-slate-400',
 };
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow';
@@ -210,7 +220,7 @@ export default function QueueSection({ preprocessingConfig, modelConfig }: Props
                   <td className="px-3 py-2 font-mono text-slate-700">{item.name}</td>
                   <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
                   <td className={`px-3 py-2 ${STATUS_COLOR[item.status] ?? 'text-slate-500'}`}>
-                    {item.status}
+                    {STATUS_LABEL[item.status] ?? item.status}
                   </td>
                   <td className="px-3 py-2">
                     {item.status === 'pending' && (
