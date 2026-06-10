@@ -45,6 +45,17 @@ export default function Tab1Dataset() {
           {/* 왼쪽: 폼 */}
           <div className="flex flex-col gap-4">
             <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">검사 제품명</label>
+              <input
+                type="text"
+                value={productNameInput}
+                onChange={e => setProductNameInput(e.target.value)}
+                placeholder="예: screw, bolt, pill ..."
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
+              />
+            </div>
+
+            <div>
               <label className="block text-xs font-medium text-slate-500 mb-1.5">Dataset Path</label>
               <div className="flex gap-2">
                 <input
@@ -68,17 +79,6 @@ export default function Tab1Dataset() {
                   {error}
                 </p>
               )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">검사 제품명</label>
-              <input
-                type="text"
-                value={productNameInput}
-                onChange={e => setProductNameInput(e.target.value)}
-                placeholder="예: screw, bolt, pill ..."
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
-              />
             </div>
           </div>
 
