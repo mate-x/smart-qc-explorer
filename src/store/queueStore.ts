@@ -28,9 +28,7 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   deleteItem: async (id) => {
-    try {
-      await configApi.deleteQueueItem(id);
-    } catch { /* ignore */ }
+    await configApi.deleteQueueItem(id);
     await get().loadQueue();
   },
 

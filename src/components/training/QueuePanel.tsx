@@ -23,18 +23,19 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function QueuePanel() {
   const { status, batch_mode, batch_total, batch_done, batch_queue_signal, setCurrentModelType } = useTrainingStore();
-  const { loading, loadError, items, loadQueue } = useQueueStore();
+  const { loading, loadError, items, loadQueue, deleteItem } = useQueueStore();
 
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchPending, setBatchPending] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     loadQueue();
   }, [batch_queue_signal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isRunning = status === 'running' || status === 'paused';
-  const visibleQueue = items.filter((item) => item.status !== 'completed');
   const pendingCount = items.filter((item) => item.status === 'pending').length;
 
   useEffect(() => {
@@ -49,7 +50,16 @@ export default function QueuePanel() {
     );
   }
 
-  if (visibleQueue.length === 0 && !batch_mode) return null;
+  if (items.length === 0) return null;
+
+  async function handleDelete(id: string) {
+    setDeleteError(null);
+    try {
+      await deleteItem(id);
+    } catch (e: unknown) {
+      setDeleteError((e as { message?: string })?.message ?? '삭제 실패');
+    }
+  }
 
   async function handleBatchStart() {
     setBatchLoading(true);
@@ -89,7 +99,7 @@ export default function QueuePanel() {
       <div className="flex items-center gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-slate-800">
           학습 대기열
-          <span className="ml-2 text-xs font-normal text-slate-400">({visibleQueue.length}개)</span>
+          <span className="ml-2 text-xs font-normal text-slate-400">({items.length}개)</span>
         </h3>
 
         {batch_mode && isRunning && (
@@ -131,13 +141,14 @@ export default function QueuePanel() {
 
       {loadError && <p className="text-xs text-red-600">{loadError}</p>}
       {batchError && <p className="text-xs text-red-600">{batchError}</p>}
+      {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
 
-      {visibleQueue.length > 0 ? (
+      {items.length > 0 ? (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                {['#', '실험명', 'Set ID', '상태'].map((h) => (
+                {['#', '실험명', 'Set ID', '상태', ''].map((h) => (
                   <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
                     {h}
                   </th>
@@ -145,13 +156,39 @@ export default function QueuePanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visibleQueue.map((item, idx) => (
+              {items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
                   <td className="px-3 py-2 font-mono text-slate-700">{item.name}</td>
                   <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
                   <td className={`px-3 py-2 ${STATUS_STYLE[item.status] ?? 'text-slate-500'}`}>
                     {STATUS_LABEL[item.status] ?? item.status}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {confirmDeleteId === item.id ? (
+                      <span className="flex gap-1.5 items-center justify-end">
+                        <button
+                          onClick={() => { handleDelete(item.id); setConfirmDeleteId(null); }}
+                          className="text-red-600 hover:text-red-500 font-medium cursor-pointer"
+                        >
+                          확인
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          취소
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(item.id)}
+                        disabled={item.status === 'running'}
+                        className="text-slate-300 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
