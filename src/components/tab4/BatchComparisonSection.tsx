@@ -15,11 +15,11 @@ const BATCH_METRIC_KEYS: Record<SortMetric, keyof ExperimentMetrics> = {
 };
 
 export default function BatchComparisonSection({ experiments }: { experiments: Experiment[] }) {
-  const batch = experiments.filter(e => e.set_id);
-  if (batch.length === 0) return null;
-
   const [filterSetId, setFilterSetId] = useState('__all__');
   const [sortBy, setSortBy] = useState<SortMetric>('AUC');
+
+  const batch = experiments.filter(e => e.set_id);
+  if (batch.length === 0) return null;
 
   const setMeta: Record<string, { count: number; date: string }> = {};
   for (const e of batch) {
@@ -37,86 +37,90 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
   });
 
   return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold text-gray-700">배치 실험 비교</h3>
-      <div className="flex gap-3 flex-wrap items-center">
-        <div>
-          <label className="text-xs text-gray-500 mr-1">실험 세트</label>
-          <select
-            value={filterSetId}
-            onChange={e => setFilterSetId(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none"
-          >
-            <option value="__all__">(전체 배치 실험)</option>
-            {setIds.map(sid => (
-              <option key={sid} value={sid}>
-                {sid} ({setMeta[sid].count}개, {setMeta[sid].date})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 mr-1">정렬 기준</label>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortMetric)}
-            className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none"
-          >
-            {BATCH_SORT_METRICS.map(m => <option key={m}>{m}</option>)}
-          </select>
-        </div>
+    <>
+      <div className="px-5 py-4 border-b border-slate-100">
+        <h3 className="text-sm font-semibold text-slate-800">배치 실험 비교</h3>
       </div>
-
-      {completed.length === 0 ? (
-        <p className="text-xs text-blue-600">
-          완료된 배치 실험이 없습니다. (미완료/실패:{' '}
-          {filtered.filter(e => e.status !== 'completed').length}개)
-        </p>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="text-xs border-collapse min-w-full">
-              <thead>
-                <tr className="bg-gray-100">
-                  {['실험명','세트ID','모델','전처리','이미지크기','파라미터요약',
-                    'Th방식','Th값','Accuracy','Precision','Recall','F1','F2','AUC','실행시각'].map(h => (
-                    <th
-                      key={h}
-                      className="border border-gray-200 px-2 py-1.5 text-left whitespace-nowrap font-medium"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {completed.map(e => (
-                  <tr key={e.experiment_id} className="hover:bg-gray-50">
-                    <td className="border border-gray-200 px-2 py-1.5 whitespace-nowrap">{e.name}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 whitespace-nowrap">{e.set_id ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{e.model_type}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{e.preprocessing_method ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{e.image_size ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{paramSummary(e)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{e.threshold_method ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{e.threshold_value ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.accuracy)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.precision)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.recall)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f1_score)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f2_score)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right font-semibold">{fmt(e.metrics?.auc)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 whitespace-nowrap">
-                      {e.created_at.slice(0, 19).replace('T', ' ')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="px-5 py-4 flex flex-col gap-2">
+        <div className="flex gap-3 flex-wrap items-center">
+          <div>
+            <label className="text-xs text-slate-500 mr-1">실험 세트</label>
+            <select
+              value={filterSetId}
+              onChange={e => setFilterSetId(e.target.value)}
+              className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
+            >
+              <option value="__all__">(전체 배치 실험)</option>
+              {setIds.map(sid => (
+                <option key={sid} value={sid}>
+                  {sid} ({setMeta[sid].count}개, {setMeta[sid].date})
+                </option>
+              ))}
+            </select>
           </div>
-          <p className="text-xs text-gray-400">총 {completed.length}개 완료된 배치 실험</p>
-        </>
-      )}
-    </div>
+          <div>
+            <label className="text-xs text-slate-500 mr-1">정렬 기준</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as SortMetric)}
+              className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
+            >
+              {BATCH_SORT_METRICS.map(m => <option key={m}>{m}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {completed.length === 0 ? (
+          <p className="text-xs text-sky-600">
+            완료된 배치 실험이 없습니다. (미완료/실패:{' '}
+            {filtered.filter(e => e.status !== 'completed').length}개)
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="text-xs border-collapse min-w-full">
+                <thead>
+                  <tr className="bg-slate-50">
+                    {['실험명','세트ID','모델','전처리','이미지크기','파라미터요약',
+                      'Th방식','Th값','Accuracy','Precision','Recall','F1','F2','AUC','실행시각'].map(h => (
+                      <th
+                        key={h}
+                        className="border border-slate-200 px-2 py-1.5 text-left whitespace-nowrap font-medium text-slate-600"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {completed.map(e => (
+                    <tr key={e.experiment_id} className="hover:bg-slate-50">
+                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{e.name}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{e.set_id ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{e.model_type}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{e.preprocessing_method ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{e.image_size ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{paramSummary(e)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{e.threshold_method ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{e.threshold_value ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.accuracy)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.precision)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.recall)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f1_score)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f2_score)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right font-semibold">{fmt(e.metrics?.auc)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">
+                        {e.created_at.slice(0, 19).replace('T', ' ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-slate-400">총 {completed.length}개 완료된 배치 실험</p>
+          </>
+        )}
+      </div>
+    </>
   );
 }

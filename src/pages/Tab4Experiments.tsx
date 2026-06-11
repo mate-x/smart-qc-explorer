@@ -274,14 +274,14 @@ export default function Tab4Experiments() {
 
       {/* 다중 실험 비교 */}
       {completed.length >= 2 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <ComparisonSection completed={completed} />
         </div>
       )}
 
       {/* 배치 실험 비교 */}
       {experiments.some(e => e.set_id) && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <BatchComparisonSection experiments={experiments} />
         </div>
       )}

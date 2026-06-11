@@ -56,18 +56,18 @@ export default function ComparisonSection({ completed }: { completed: Experiment
   });
 
   return (
-    <div className="border border-gray-200 rounded">
+    <>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+        className="w-full flex items-center justify-between px-5 py-4 border-b border-slate-100 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
       >
         <span>다중 실험 비교 차트</span>
-        <span className="text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
+        <span className="text-slate-400 text-xs">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="px-4 pb-4 flex flex-col gap-3">
-          <p className="text-xs text-gray-500">비교할 실험을 선택하세요 (최대 10개)</p>
+        <div className="px-5 pb-5 pt-3 flex flex-col gap-3">
+          <p className="text-xs text-slate-500">비교할 실험을 선택하세요 (최대 10개)</p>
           <div className="flex flex-wrap gap-3">
             {completed.map(e => (
               <label key={e.experiment_id} className="flex items-center gap-1 text-xs cursor-pointer">
@@ -82,7 +82,7 @@ export default function ComparisonSection({ completed }: { completed: Experiment
           </div>
 
           <div className="flex flex-wrap gap-3 items-center">
-            <span className="text-xs text-gray-500">메트릭:</span>
+            <span className="text-xs text-slate-500">메트릭:</span>
             {COMPARE_METRICS.map(({ label }) => (
               <label key={label} className="flex items-center gap-1 text-xs cursor-pointer">
                 <input
@@ -105,7 +105,7 @@ export default function ComparisonSection({ completed }: { completed: Experiment
           </div>
 
           {selected.length < 2 ? (
-            <p className="text-xs text-blue-600">비교 차트를 보려면 실험을 2개 이상 선택하세요.</p>
+            <p className="text-xs text-sky-600">비교 차트를 보려면 실험을 2개 이상 선택하세요.</p>
           ) : selectedMetrics.length === 0 ? null : chartType === 'bar' ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={barData} margin={{ top: 5, right: 10, bottom: 20, left: 0 }}>
@@ -120,7 +120,7 @@ export default function ComparisonSection({ completed }: { completed: Experiment
               </BarChart>
             </ResponsiveContainer>
           ) : selectedMetrics.length < 2 ? (
-            <p className="text-xs text-blue-600">레이더 차트는 메트릭을 2개 이상 선택해야 합니다.</p>
+            <p className="text-xs text-sky-600">레이더 차트는 메트릭을 2개 이상 선택해야 합니다.</p>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={radarData}>
@@ -143,6 +143,6 @@ export default function ComparisonSection({ completed }: { completed: Experiment
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
