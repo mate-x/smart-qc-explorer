@@ -171,14 +171,14 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
   // 조합 계산
   const combos = useMemo<ComboRow[]>(() => {
-    const methods = preMethods.length > 0 ? preMethods : ['없음'];
-    const bgs = bgMethods.length > 0 ? bgMethods : ['none'];
-    const norms = normMethods.length > 0 ? normMethods : ['ImageNet'];
-    const sizes = imageSizes.length > 0 ? imageSizes : [256];
-    const batches = batchSizes.length > 0 ? batchSizes : [16];
-    const seeds = randomSeeds.length > 0 ? randomSeeds : [42];
+    const methods = preMethods;
+    const bgs = bgMethods;
+    const norms = normMethods;
+    const sizes = imageSizes;
+    const batches = batchSizes;
+    const seeds = randomSeeds;
     const tMethods = thresholdMethods.length > 0 ? thresholdMethods : ['percentile'];
-    const tValues = thresholdValues.length > 0 ? thresholdValues : [95.0];
+    const tValues = thresholdValues;
 
     const rows: ComboRow[] = [];
 
@@ -206,16 +206,16 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                     };
 
                     if (modelType === 'efficientad') {
-                      const mSizes = effModelSizes.length > 0 ? effModelSizes : [DEFAULT_EFFICIENTAD.model_size];
-                      const opts = effOptimizers.length > 0 ? effOptimizers : [DEFAULT_EFFICIENTAD.optimizer];
-                      const scheds = effSchedulers.length > 0 ? effSchedulers : [DEFAULT_EFFICIENTAD.scheduler];
-                      const ocs = effOutChannels.length > 0 ? effOutChannels.map(Number) : [DEFAULT_EFFICIENTAD.out_channels];
-                      const steps = effTrainSteps.length > 0 ? effTrainSteps : [DEFAULT_EFFICIENTAD.train_steps];
-                      const lrs = effLRs.length > 0 ? effLRs : [DEFAULT_EFFICIENTAD.learning_rate];
+                      const mSizes = effModelSizes;
+                      const opts = effOptimizers;
+                      const scheds = effSchedulers;
+                      const ocs = effOutChannels.map(Number);
+                      const steps = effTrainSteps;
+                      const lrs = effLRs;
                       const pads = effPaddings.length > 0 ? effPaddings : ['미사용'];
                       const pens = effPenalties.length > 0 ? effPenalties : ['미사용'];
-                      const wds = effWeightDecays.length > 0 ? effWeightDecays : [DEFAULT_EFFICIENTAD.weight_decay];
-                      const aelws = effAeLossWeights.length > 0 ? effAeLossWeights : [DEFAULT_EFFICIENTAD.ae_loss_weight];
+                      const wds = effWeightDecays;
+                      const aelws = effAeLossWeights;
 
                       for (const ms of mSizes) for (const opt of opts) for (const sched of scheds)
                         for (const oc of ocs) for (const st of steps) for (const lr of lrs)
@@ -247,12 +247,12 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                               });
                             }
                     } else {
-                      const bbs = pcBackbones.length > 0 ? pcBackbones : [DEFAULT_PATCHCORE.backbone];
-                      const ks = pcKernels.length > 0 ? pcKernels.map(Number) : [DEFAULT_PATCHCORE.neighbourhood_kernel_size];
-                      const crs = pcCoresets.length > 0 ? pcCoresets : [DEFAULT_PATCHCORE.coreset_sampling_ratio];
-                      const mts = pcMaxTrains.length > 0 ? pcMaxTrains : [DEFAULT_PATCHCORE.max_train];
-                      const knns = pcKnns.length > 0 ? pcKnns : [DEFAULT_PATCHCORE.knn];
-                      const tks = pcTopKs.length > 0 ? pcTopKs : [DEFAULT_PATCHCORE.top_k_ratio];
+                      const bbs = pcBackbones;
+                      const ks = pcKernels.map(Number);
+                      const crs = pcCoresets;
+                      const mts = pcMaxTrains;
+                      const knns = pcKnns;
+                      const tks = pcTopKs;
 
                       for (const bb of bbs) for (const k of ks) for (const cr of crs)
                         for (const mt of mts) for (const kn of knns) for (const tk of tks) {

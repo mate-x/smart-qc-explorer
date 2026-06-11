@@ -88,76 +88,89 @@ export default function QueueSection() {
 
       {/* 대기열 테이블 */}
       {localItems.length > 0 ? (
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {['#', '모델', 'Set ID', '▲▼', ''].map((h) => (
-                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {localItems.map((item, idx) => (
-                <tr
-                  key={idx}
-                  onClick={() => setSelectedIndex((prev) => (prev === idx ? null : idx))}
-                  className={`transition-colors cursor-pointer ${selectedIndex === idx ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
-                >
-                  <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
-                  <td className="px-3 py-2 font-mono text-slate-700">{item.model_config.model_type}</td>
-                  <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    {selectedIndex === idx && (
-                      <span className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => reorderLocalItem(idx, 'up')}
-                          disabled={idx === 0}
-                          className="px-1.5 py-0.5 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs cursor-pointer"
-                        >▲</button>
-                        <button
-                          type="button"
-                          onClick={() => reorderLocalItem(idx, 'down')}
-                          disabled={idx === localItems.length - 1}
-                          className="px-1.5 py-0.5 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs cursor-pointer"
-                        >▼</button>
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    {confirmDeleteIndex === idx ? (
-                      <span className="flex gap-1.5 items-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            deleteLocalItem(idx);
-                            setConfirmDeleteIndex(null);
-                            if (selectedIndex === idx) setSelectedIndex(null);
-                          }}
-                          className="text-red-600 hover:underline cursor-pointer text-xs"
-                        >확인</button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteIndex(null)}
-                          className="text-slate-400 hover:underline cursor-pointer text-xs"
-                        >취소</button>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteIndex(idx)}
-                        className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
-                      >삭제</button>
-                    )}
-                  </td>
+        <>
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['#', '모델', 'Set ID', ''].map((h) => (
+                    <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {localItems.map((item, idx) => (
+                  <tr
+                    key={idx}
+                    onClick={() => setSelectedIndex((prev) => (prev === idx ? null : idx))}
+                    className={`transition-colors cursor-pointer ${selectedIndex === idx ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                  >
+                    <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
+                    <td className="px-3 py-2 font-mono text-slate-700">{item.model_config.model_type}</td>
+                    <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      {confirmDeleteIndex === idx ? (
+                        <span className="flex gap-1.5 items-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteLocalItem(idx);
+                              setConfirmDeleteIndex(null);
+                              if (selectedIndex === idx) setSelectedIndex(null);
+                              else if (selectedIndex !== null && selectedIndex > idx)
+                                setSelectedIndex(selectedIndex - 1);
+                            }}
+                            className="text-red-600 hover:underline cursor-pointer text-xs"
+                          >확인</button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteIndex(null)}
+                            className="text-slate-400 hover:underline cursor-pointer text-xs"
+                          >취소</button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteIndex(idx)}
+                          className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
+                        >삭제</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 순서 변경 버튼 */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedIndex === null) return;
+                reorderLocalItem(selectedIndex, 'up');
+                setSelectedIndex(selectedIndex - 1);
+              }}
+              disabled={selectedIndex === null || selectedIndex === 0}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >▲ 위로</button>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedIndex === null) return;
+                reorderLocalItem(selectedIndex, 'down');
+                setSelectedIndex(selectedIndex + 1);
+              }}
+              disabled={selectedIndex === null || selectedIndex === localItems.length - 1}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >▼ 아래로</button>
+            {selectedIndex !== null && (
+              <span className="text-xs text-slate-400">{selectedIndex + 1}번 항목 선택됨</span>
+            )}
+          </div>
+        </>
       ) : (
         <p className="text-xs text-slate-400">대기 중인 항목이 없습니다.</p>
       )}
