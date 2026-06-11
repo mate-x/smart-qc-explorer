@@ -150,11 +150,6 @@ export default function IdleSection() {
             탭1에서 데이터셋 경로를 검증해 주세요.
           </div>
         )}
-        {datasetPath && !(preprocessingConfig && modelConfig) && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-700">
-            전처리 / 모델 설정 탭에서 설정을 먼저 저장해 주세요.
-          </div>
-        )}
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-500">
             실험명 <span className="font-normal text-slate-400">(비워두면 자동 생성)</span>

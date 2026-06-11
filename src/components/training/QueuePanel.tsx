@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTrainingStore } from '../../store/trainingStore';
-import { useConfigStore } from '../../store/configStore';
-import { getQueue } from '../../api/configApi';
-import type { QueueItem } from '../../types/config';
+import { useQueueStore } from '../../store/queueStore';
 import { startBatchTraining, stopBatchTraining, skipBatchItem } from '../../api/trainingApi';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -25,34 +23,32 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function QueuePanel() {
   const { status, batch_mode, batch_total, batch_done, batch_queue_signal, setCurrentModelType } = useTrainingStore();
-  const { preprocessingConfig, modelConfig } = useConfigStore();
-  const hasConfig = !!(preprocessingConfig && modelConfig);
+  const { loading, loadError, items, loadQueue } = useQueueStore();
 
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchPending, setBatchPending] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
 
-  async function loadQueue() {
-    try {
-      const res = await getQueue();
-      setQueue(res.data);
-      setLoadError(null);
-    } catch (e: unknown) {
-      setLoadError((e as { message?: string })?.message ?? '큐 로드 실패');
-    }
-  }
-
-  useEffect(() => { loadQueue(); }, [batch_queue_signal]);
+  useEffect(() => {
+    loadQueue();
+  }, [batch_queue_signal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isRunning = status === 'running' || status === 'paused';
-  const visibleQueue = queue.filter((item) => item.status !== 'completed');
-  const pendingCount = queue.filter((item) => item.status === 'pending').length;
+  const visibleQueue = items.filter((item) => item.status !== 'completed');
+  const pendingCount = items.filter((item) => item.status === 'pending').length;
 
   useEffect(() => {
     if (isRunning) setBatchPending(false);
   }, [isRunning]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-center min-h-[60px]">
+        <span className="text-xs text-slate-400 animate-pulse">큐 로딩 중...</span>
+      </div>
+    );
+  }
+
   if (visibleQueue.length === 0 && !batch_mode) return null;
 
   async function handleBatchStart() {
@@ -65,19 +61,27 @@ export default function QueuePanel() {
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       setBatchError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '배치 시작 실패');
-    } finally { setBatchLoading(false); }
+    } finally {
+      setBatchLoading(false);
+    }
   }
 
   async function handleSkip() {
     setBatchError(null);
-    try { await skipBatchItem(); }
-    catch (e: unknown) { setBatchError((e as { message?: string })?.message ?? '건너뜀 실패'); }
+    try {
+      await skipBatchItem();
+    } catch (e: unknown) {
+      setBatchError((e as { message?: string })?.message ?? '건너뜀 실패');
+    }
   }
 
   async function handleBatchStop() {
     setBatchError(null);
-    try { await stopBatchTraining(); }
-    catch (e: unknown) { setBatchError((e as { message?: string })?.message ?? '중단 실패'); }
+    try {
+      await stopBatchTraining();
+    } catch (e: unknown) {
+      setBatchError((e as { message?: string })?.message ?? '중단 실패');
+    }
   }
 
   return (
@@ -100,8 +104,7 @@ export default function QueuePanel() {
           {!isRunning && pendingCount > 0 && (
             <button
               onClick={handleBatchStart}
-              disabled={batchLoading || batchPending || !hasConfig}
-              title={!hasConfig ? '전처리/모델 설정을 먼저 저장해 주세요' : undefined}
+              disabled={batchLoading || batchPending}
               className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
               {batchLoading ? '시작 중...' : batchPending ? '첫 항목 준비 중...' : '▶▶ 일괄 학습 시작'}
