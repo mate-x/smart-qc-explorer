@@ -17,8 +17,6 @@ export default function Tab4Experiments() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [savePath, setSavePath] = useState('');
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -78,18 +76,12 @@ export default function Tab4Experiments() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleDelete() {
-    if (!selected) return;
-    setDeleteError(null);
+  async function handleDeleteRow(expId: string) {
     try {
-      await deleteExperiment(selected.experiment_id);
-      setSelectedExperimentId(null);
-      setConfirmDelete(false);
+      await deleteExperiment(expId);
+      if (selectedExperimentId === expId) setSelectedExperimentId(null);
       load();
-    } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setDeleteError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '삭제 실패');
-    }
+    } catch { /* silent */ }
   }
 
   async function handleSave() {
@@ -135,24 +127,8 @@ export default function Tab4Experiments() {
     <div className="flex flex-col gap-5">
       {/* 실험 목록 테이블 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-100">
           <h2 className="text-sm font-semibold text-slate-800">실험 목록</h2>
-          <div className="flex items-center gap-2">
-            {selected && (
-              confirmDelete ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-amber-700">삭제 후 복구 불가 — 계속하시겠습니까?</span>
-                  <button onClick={handleDelete} className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer">확인</button>
-                  <button onClick={() => { setConfirmDelete(false); setDeleteError(null); }} className="px-3 py-1 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs rounded-lg transition-colors cursor-pointer">취소</button>
-                  {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
-                </div>
-              ) : (
-                <button onClick={() => setConfirmDelete(true)} className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-600 text-xs font-medium rounded-lg transition-colors cursor-pointer">
-                  삭제
-                </button>
-              )
-            )}
-          </div>
         </div>
         <div className="overflow-x-auto overflow-y-auto max-h-[260px]">
           <table className="w-full text-xs">
@@ -163,6 +139,7 @@ export default function Tab4Experiments() {
                     {h}{sortCol === h && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}
                   </th>
                 ))}
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -196,6 +173,14 @@ export default function Tab4Experiments() {
                       }`}>
                         {e.status === 'completed' ? (e.early_stopped ? '완료 (조기종료)' : '완료') : e.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={ev => { ev.stopPropagation(); handleDeleteRow(e.experiment_id); }}
+                        className="text-slate-300 hover:text-red-400 cursor-pointer transition-colors"
+                      >
+                        삭제
+                      </button>
                     </td>
                   </tr>
                 );
