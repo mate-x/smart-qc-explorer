@@ -98,14 +98,14 @@ export default function ExportSection({ expId, threshold, defectClass }: Props) 
           disabled={csvLoading}
           className="px-3 py-1.5 border border-gray-300 text-sm rounded hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
         >
-          {csvLoading ? '내보내는 중...' : '📊 CSV 다운로드'}
+          {csvLoading ? '내보내는 중...' : 'CSV 다운로드'}
         </button>
         <button
           onClick={handleZip}
           disabled={zipLoading}
           className="px-3 py-1.5 border border-gray-300 text-sm rounded hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
         >
-          {zipLoading ? 'ZIP 생성 중...' : '📦 ZIP 다운로드'}
+          {zipLoading ? 'ZIP 생성 중...' : 'ZIP 다운로드'}
         </button>
       </div>
       {csvError && <p className="text-xs text-red-600">CSV: {csvError}</p>}

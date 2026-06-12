@@ -170,8 +170,8 @@ export default function QueueSection() {
                     >
                       {patchcoreOpen ? '▾' : '▸'} [PatchCore]
                     </th>
-                    <th rowSpan={2} className={`sticky right-12 z-30 w-[3rem] ${thCls}`}>상세</th>
-                    <th rowSpan={2} className={`sticky right-0 z-30 w-[3rem] ${thCls}`}>삭제</th>
+                    <th rowSpan={2} className={`sticky right-12 z-30 w-[3rem] ${thCls}`}></th>
+                    <th rowSpan={2} className={`sticky right-0 z-30 w-[3rem] ${thCls}`}></th>
                   </tr>
 
                   {/* Row 2: 컬럼 헤더 */}

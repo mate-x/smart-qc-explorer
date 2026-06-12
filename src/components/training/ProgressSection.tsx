@@ -75,7 +75,7 @@ export default function ProgressSection() {
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-slate-500">일괄 학습</span>
           <span className="text-xs bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
-            {batch_done} / {batch_total}
+            {batch_done+1} / {batch_total}
           </span>
         </div>
       )}
