@@ -3,9 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { getExperiments, deleteExperiment } from '../api/experimentsApi';
 import { startExport, getExportJobStatus } from '../api/exportApi';
 import type { ExportJobStatus } from '../api/exportApi';
+import { getBuildStatus, buildAnomalyMap, getJobStatus } from '../api/anomalyMapApi';
 import { useExperimentsStore } from '../store/experimentsStore';
 import { useConfigStore } from '../store/configStore';
+import { useAnomalyMapStore } from '../store/anomalyMapStore';
 import type { Experiment } from '../types/experiments';
+import type { AnomalyMapStatus } from '../types/anomalyMap';
+import { computeInitialThreshold } from '../utils/thresholdUtils';
 import { paramSummary, fmt } from '../components/tab4/experimentUtils';
 import ConfusionMatrixChart from '../components/tab4/ConfusionMatrixChart';
 import RocCurveChart from '../components/tab4/RocCurveChart';
@@ -29,6 +33,12 @@ export default function Tab4Experiments() {
 
   const selected = experiments.find(e => e.experiment_id === selectedExperimentId) ?? null;
   const completed = experiments.filter(e => e.status === 'completed');
+
+  const [buildStatus, setBuildStatus] = useState<AnomalyMapStatus | null>(null);
+  const [building, setBuilding] = useState(false);
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const [localThreshold, setLocalThreshold] = useState<number | null>(null);
+  const { setThreshold: storeThreshold } = useAnomalyMapStore();
 
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -87,6 +97,48 @@ export default function Tab4Experiments() {
   }, [setSelectedExperimentId]);
 
   useEffect(() => { load(selectedExperimentId == null); }, [load]);
+
+  // selected 변경 시 buildStatus fetch
+  useEffect(() => {
+    if (!selected || selected.status !== 'completed') {
+      setBuildStatus(null);
+      return;
+    }
+    getBuildStatus(selected.experiment_id)
+      .then(res => setBuildStatus(res.data))
+      .catch(() => setBuildStatus({ built: false, image_count: 0 }));
+  }, [selected?.experiment_id]);
+
+  // selected 변경 시 localThreshold 초기화
+  useEffect(() => {
+    if (!selected?.metrics) { setLocalThreshold(null); return; }
+    setLocalThreshold(computeInitialThreshold(selected));
+  }, [selected?.experiment_id]);
+
+  async function handleBuild() {
+    if (!selected) return;
+    setBuilding(true);
+    setBuildError(null);
+    try {
+      const res = await buildAnomalyMap(selected.experiment_id);
+      const jobId = res.data.job_id;
+      let done = false;
+      while (!done) {
+        await new Promise(r => setTimeout(r, 1000));
+        const statusRes = await getJobStatus(jobId);
+        if (statusRes.data.status === 'completed') done = true;
+        else if (statusRes.data.status === 'failed')
+          throw new Error(statusRes.data.error ?? '빌드 실패');
+      }
+      const newStatus = await getBuildStatus(selected.experiment_id);
+      setBuildStatus(newStatus.data);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setBuildError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '빌드 실패');
+    } finally {
+      setBuilding(false);
+    }
+  }
 
   async function handleDeleteRow(expId: string) {
     try {
@@ -230,18 +282,48 @@ export default function Tab4Experiments() {
           <div className="grid grid-cols-3 gap-4">
             <ConfusionMatrixChart metrics={selected.metrics} />
             <RocCurveChart metrics={selected.metrics} />
-            <ScoreDistChart metrics={selected.metrics} thresholdValue={selected.threshold_value} />
+            <ScoreDistChart
+              metrics={selected.metrics}
+              thresholdValue={localThreshold ?? undefined}
+              onThresholdChange={setLocalThreshold}
+            />
           </div>
 
-          {/* Tab5 이동 */}
-          <div>
+          {/* Anomaly Map 빌드 / 보기 */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {buildStatus?.built ? (
+              <span className="text-xs text-emerald-600 font-medium">
+                ✓ Anomaly Map 생성됨 ({buildStatus.image_count}개)
+              </span>
+            ) : (
+              <span className="text-xs text-slate-400">Anomaly Map 미생성</span>
+            )}
+
             <button
-              onClick={() => navigate('/anomaly-map')}
-              className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+              onClick={handleBuild}
+              disabled={building}
+              className="px-4 py-2 border border-slate-300 text-sm rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
             >
-              이 실험으로 Anomaly Map 보기
+              {building ? '생성 중...' : buildStatus?.built ? '재생성' : 'Anomaly Map 생성'}
+            </button>
+
+            <button
+              onClick={() => {
+                if (localThreshold != null) storeThreshold(localThreshold);
+                navigate('/anomaly-map');
+              }}
+              disabled={!buildStatus?.built}
+              className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+            >
+              이 threshold로 Anomaly Map 보기
             </button>
           </div>
+
+          {buildError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {buildError}
+            </p>
+          )}
         </div>
       )}
 

@@ -1,41 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getExperiments } from '../api/experimentsApi';
-import { getBuildStatus, buildAnomalyMap, getJobStatus, getAnomalyImages } from '../api/anomalyMapApi';
+import { getBuildStatus, getAnomalyImages } from '../api/anomalyMapApi';
 import { useExperimentsStore } from '../store/experimentsStore';
 import { useAnomalyMapStore } from '../store/anomalyMapStore';
 import type { Experiment } from '../types/experiments';
 import type { AnomalyMapImagesResponse, AnomalyMapStatus } from '../types/anomalyMap';
-import ControlBar from '../components/tab5/ControlBar';
+import { computeInitialThreshold } from '../utils/thresholdUtils';
 import ImageGrid from '../components/tab5/ImageGrid';
 import ExportSection from '../components/tab5/ExportSection';
-
-function sortedPercentile(sorted: number[], p: number): number {
-  const idx = (p / 100) * (sorted.length - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo]);
-}
-
-function computeInitialThreshold(exp: Experiment): number {
-  const scores = exp.metrics?.anomaly_scores ?? [];
-  const labels = exp.metrics?.image_labels ?? [];
-  if (scores.length === 0) return 0.5;
-  const sMin = Math.min(...scores);
-  const sMax = Math.max(...scores);
-  if (sMax <= sMin) return 0.5;
-  const method = exp.threshold_method ?? 'percentile';
-  const value = exp.threshold_value ?? 95.0;
-  let rawThr: number;
-  if (method === 'absolute') {
-    rawThr = value;
-  } else {
-    const normalSorted = scores.filter((_, i) => labels[i] === 0).sort((a, b) => a - b);
-    rawThr = normalSorted.length > 0 ? sortedPercentile(normalSorted, value) : value;
-  }
-  return Math.round(Math.max(0, Math.min(1, (rawThr - sMin) / (sMax - sMin))) * 10000) / 10000;
-}
 
 function extractError(e: unknown): string {
   const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -46,18 +19,14 @@ function extractError(e: unknown): string {
 export default function Tab5AnomalyMap() {
   const navigate = useNavigate();
   const { selectedExperimentId } = useExperimentsStore();
-  const { threshold: storedThreshold, setThreshold: storeThreshold } = useAnomalyMapStore();
+  const { threshold: storedThreshold } = useAnomalyMapStore();
 
   const [experiment, setExperiment] = useState<Experiment | null>(null);
   const [expLoading, setExpLoading] = useState(true);
   const [expError, setExpError] = useState<string | null>(null);
 
   const [buildStatus, setBuildStatus] = useState<AnomalyMapStatus | null>(null);
-  const [building, setBuilding] = useState(false);
-  const [buildError, setBuildError] = useState<string | null>(null);
 
-  const [threshold, setLocalThreshold] = useState(storedThreshold ?? 0.5);
-  const [debouncedThreshold, setDebouncedThreshold] = useState(storedThreshold ?? 0.5);
   const [selectedClass, setSelectedClass] = useState('전체');
   const [defectClasses, setDefectClasses] = useState<string[]>([]);
 
@@ -66,13 +35,8 @@ export default function Tab5AnomalyMap() {
   const [imagesError, setImagesError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedThreshold(threshold);
-      storeThreshold(threshold);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [threshold, storeThreshold]);
+  // threshold: Tab4에서 store에 저장한 값 우선, 없으면 experiment 기반 계산
+  const threshold = storedThreshold ?? (experiment ? computeInitialThreshold(experiment) : 0.5);
 
   useEffect(() => {
     if (!selectedExperimentId) { setExpLoading(false); return; }
@@ -82,11 +46,6 @@ export default function Tab5AnomalyMap() {
       .then(res => {
         const exp = res.data.find(e => e.experiment_id === selectedExperimentId) ?? null;
         setExperiment(exp);
-        if (exp && storedThreshold == null) {
-          const initTh = computeInitialThreshold(exp);
-          setLocalThreshold(initTh);
-          setDebouncedThreshold(initTh);
-        }
       })
       .catch(e => setExpError(extractError(e)))
       .finally(() => setExpLoading(false));
@@ -105,7 +64,7 @@ export default function Tab5AnomalyMap() {
     setImagesError(null);
     getAnomalyImages(
       selectedExperimentId,
-      debouncedThreshold,
+      threshold,
       selectedClass !== '전체' ? selectedClass : undefined,
     )
       .then(res => {
@@ -118,31 +77,9 @@ export default function Tab5AnomalyMap() {
       })
       .catch(e => setImagesError(extractError(e)))
       .finally(() => setImagesLoading(false));
-  }, [selectedExperimentId, buildStatus?.built, debouncedThreshold, selectedClass]);
-
-  async function handleBuild() {
-    if (!selectedExperimentId) return;
-    setBuilding(true);
-    setBuildError(null);
-    try {
-      const res = await buildAnomalyMap(selectedExperimentId);
-      const jobId = res.data.job_id;
-      let done = false;
-      while (!done) {
-        await new Promise(r => setTimeout(r, 1000));
-        const statusRes = await getJobStatus(jobId);
-        if (statusRes.data.status === 'completed') done = true;
-        else if (statusRes.data.status === 'failed')
-          throw new Error(statusRes.data.error ?? '빌드 실패');
-      }
-      const newStatus = await getBuildStatus(selectedExperimentId);
-      setBuildStatus(newStatus.data);
-    } catch (e: unknown) {
-      setBuildError(extractError(e));
-    } finally {
-      setBuilding(false);
-    }
-  }
+    // threshold는 Tab4 navigate 시점에 고정 — deps에서 제외
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedExperimentId, buildStatus?.built, selectedClass]);
 
   // 실험 미선택 빈 상태
   if (!selectedExperimentId) {
@@ -189,50 +126,45 @@ export default function Tab5AnomalyMap() {
             Anomaly Map — {experiment.name}
           </span>
         )}
-      </div>
-
-      {/* 빌드 섹션 */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <div className="flex items-center gap-4 flex-wrap">
-          {buildStatus?.built ? (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-sm font-medium text-slate-700">
-                Anomaly Map 생성 완료
-                <span className="ml-2 text-xs text-slate-400 font-normal">({buildStatus.image_count}개 이미지)</span>
-              </span>
-            </div>
-          ) : (
-            <span className="text-sm text-slate-500">Anomaly Map이 아직 생성되지 않았습니다.</span>
-          )}
-          <div className="flex-1" />
-          <button
-            onClick={handleBuild}
-            disabled={building}
-            className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 whitespace-nowrap transition-colors cursor-pointer"
-          >
-            {building ? '생성 중...' : buildStatus?.built ? '재생성' : 'Anomaly Map 생성'}
-          </button>
-          {building && (
-            <span className="text-xs text-slate-400 animate-pulse">모델 추론 중, 잠시 기다려 주세요...</span>
-          )}
-        </div>
-        {buildError && (
-          <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{buildError}</p>
+        {experiment && (
+          <span className="text-xs text-slate-400 font-mono">
+            threshold: {threshold.toFixed(4)}
+          </span>
         )}
       </div>
 
-      {/* 컨트롤 + 이미지 */}
+      {/* Anomaly Map 미생성 안내 */}
+      {buildStatus && !buildStatus.built && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 flex flex-col items-center gap-4">
+          <p className="text-sm text-slate-500">Anomaly Map이 생성되지 않았습니다.</p>
+          <button
+            onClick={() => navigate('/experiments')}
+            className="px-5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+          >
+            ← 실험 히스토리에서 생성하기
+          </button>
+        </div>
+      )}
+
+      {/* 결함 유형 필터 + 이미지 그리드 */}
       {buildStatus?.built && (
         <>
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <ControlBar
-              threshold={threshold}
-              onThresholdChange={setLocalThreshold}
-              defectClasses={defectClasses}
-              selectedClass={selectedClass}
-              onClassChange={setSelectedClass}
-            />
+            {defectClasses.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-600 whitespace-nowrap">결함 유형</label>
+                <select
+                  value={selectedClass}
+                  onChange={e => setSelectedClass(e.target.value)}
+                  className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none"
+                >
+                  <option value="전체">전체</option>
+                  {defectClasses.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
@@ -244,7 +176,7 @@ export default function Tab5AnomalyMap() {
               <ImageGrid
                 imagesData={imagesData}
                 expId={selectedExperimentId}
-                threshold={debouncedThreshold}
+                threshold={threshold}
                 page={page}
                 onPageChange={setPage}
               />
@@ -254,7 +186,7 @@ export default function Tab5AnomalyMap() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <ExportSection
               expId={selectedExperimentId}
-              threshold={debouncedThreshold}
+              threshold={threshold}
               defectClass={selectedClass}
             />
           </div>
