@@ -67,20 +67,26 @@ export default function Tab4Experiments() {
     });
   }, [experiments, sortCol, sortDir]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (autoSelect = false) => {
     setLoading(true);
     setError(null);
     try {
       const res = await getExperiments();
       setExperiments(res.data);
+      if (autoSelect) {
+        const latest = res.data
+          .filter(e => e.status === 'completed')
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+        if (latest) setSelectedExperimentId(latest.experiment_id);
+      }
     } catch (e: unknown) {
       setError((e as { message?: string })?.message ?? '실험 목록 로드 실패');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setSelectedExperimentId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(selectedExperimentId == null); }, [load]);
 
   async function handleDeleteRow(expId: string) {
     try {
