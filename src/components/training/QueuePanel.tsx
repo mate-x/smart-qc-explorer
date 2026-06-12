@@ -117,7 +117,7 @@ export default function QueuePanel() {
               disabled={batchLoading || batchPending}
               className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
-              {batchLoading ? '시작 중...' : batchPending ? '첫 항목 준비 중...' : '▶▶ 일괄 학습 시작'}
+              {batchLoading ? '시작 중...' : batchPending ? '첫 항목 준비 중...' : pendingCount === 1 ? '▶ 학습 시작' : '▶▶ 일괄 학습 시작'}
             </button>
           )}
           {isRunning && batch_mode && (
