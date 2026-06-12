@@ -23,7 +23,7 @@ function fmtSecs(s: number): string {
 }
 
 export default function ProgressSection() {
-  const { status, progress, loss_history, log_lines, batch_mode, batch_total, batch_done, model_type } =
+  const { status, progress, loss_history, log_lines, batch_mode, batch_total, batch_done, model_type, current_stage_name } =
     useTrainingStore();
   const logRef = useRef<HTMLPreElement>(null);
   const [ctrlError, setCtrlError] = useState<string | null>(null);
@@ -38,6 +38,7 @@ export default function ProgressSection() {
   const ratio = progress ? progress.step / progress.total : 0;
   const etaSecs = ratio > 0 && progress ? Math.round((progress.elapsed / ratio) * (1 - ratio)) : null;
   const chartData = downsample(loss_history, 500);
+  const isInferenceStage = current_stage_name === '테스트 추론' || current_stage_name === '완료';
 
   async function handlePauseToggle() {
     setPauseLoading(true);
@@ -79,8 +80,16 @@ export default function ProgressSection() {
         </div>
       )}
 
-      {/* 진행률 바 */}
-      {progress && (
+      {/* 진행률 바 / 추론 중 표시 */}
+      {isInferenceStage ? (
+        <div className="flex items-center gap-3 py-1">
+          <span className="inline-block w-4 h-4 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin shrink-0" />
+          <span className="text-sm font-medium text-violet-700">테스트 추론 진행 중...</span>
+          {progress && (
+            <span className="text-xs text-slate-400">경과: {fmtSecs(progress.elapsed)}</span>
+          )}
+        </div>
+      ) : progress ? (
         <div className="flex flex-col gap-2">
           <div className="flex justify-between items-center text-xs text-slate-500">
             <span>Step {progress.step.toLocaleString()} / {progress.total.toLocaleString()}</span>
@@ -100,7 +109,7 @@ export default function ProgressSection() {
             {etaSecs != null && <span>예상 잔여: {fmtSecs(etaSecs)}</span>}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* 제어 버튼 */}
       <div className="flex gap-2 items-center flex-wrap">
@@ -129,8 +138,8 @@ export default function ProgressSection() {
         {ctrlError && <p className="text-xs text-red-600">{ctrlError}</p>}
       </div>
 
-      {/* Loss 차트 */}
-      {model_type !== 'patchcore' && chartData.length > 1 && (
+      {/* Loss 차트 — 추론 단계 진입 후 숨김 */}
+      {!isInferenceStage && model_type !== 'patchcore' && chartData.length > 1 && (
         <div>
           <p className="text-xs font-medium text-slate-500 mb-2">Loss 추이</p>
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
