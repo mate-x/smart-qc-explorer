@@ -99,10 +99,13 @@ function CheckGroup({ options, selected, onToggle }: CheckGroupProps) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <span className="text-xs font-medium text-slate-500">
+        {label}
+        {required && <span className="ml-1 text-red-400 font-semibold">*필수</span>}
+      </span>
       {children}
     </div>
   );
@@ -110,8 +113,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 // ── 요약 뷰 헬퍼 ──
 
-function SummaryRow({ label, values }: { label: string; values: string[] }) {
-  if (values.length < 2) return null;
+function SummaryRow({ label, values, alwaysShow = false }: { label: string; values: string[]; alwaysShow?: boolean }) {
+  if (values.length === 0) return null;
+  if (!alwaysShow && values.length < 2) return null;
   return (
     <div className="flex items-start gap-2">
       <span className="text-xs text-slate-500 w-32 flex-shrink-0">{label}</span>
@@ -154,11 +158,11 @@ interface Props {
 export default function BatchExperimentForm({ preConfig }: Props) {
   const { addLocalItem } = useLocalQueueStore();
   const [modelTypes, setModelTypes] = useState<ModelType[]>(['efficientad']);
+  const [activeModelTab, setActiveModelTab] = useState<ModelType>('efficientad');
 
   // 공통 파라미터
   const [preMethods, setPreMethods] = useState<string[]>([]);
   const [bgMethods, setBgMethods] = useState<string[]>([]);
-  const [normMethods, setNormMethods] = useState<string[]>([]);
   const [imageSizes, setImageSizes] = useState<number[]>([256]);
   const [commonAdvOpen, setCommonAdvOpen] = useState(false);
   const [batchSizes, setBatchSizes] = useState<number[]>([16]);
@@ -201,7 +205,6 @@ export default function BatchExperimentForm({ preConfig }: Props) {
     // 3그룹 폴백 제거: 하나라도 비면 preCombos = [] → combos = []
     const methods  = preMethods;
     const bgs      = bgMethods;
-    const norms    = normMethods;
     const sizes    = imageSizes;
     const batches  = batchSizes;
     const seeds    = randomSeeds;
@@ -249,31 +252,29 @@ export default function BatchExperimentForm({ preConfig }: Props) {
       const preMethod = m === '없음' ? 'none' : m === 'Homomorphic' ? 'homomorphic' : m === 'HE' ? 'he' : 'clahe';
       for (const bg of bgs) {
         const bgMethod = bg === 'SAM2' ? 'sam2' : 'none';
-        for (const norm of norms) {
-          const mean = norm === 'ImageNet' ? IMAGENET_MEAN : preConfig.mean;
-          const std  = norm === 'ImageNet' ? IMAGENET_STD  : preConfig.std;
-          for (const sz of sizes) {
-            for (const batch of batches) {
-              for (const seed of seeds) {
-                for (const tm of tMethods) {
-                  for (const tv of tValues) {
-                    preCombos.push({
-                      pre: {
-                        method: preMethod as PreprocessingConfig['method'],
-                        background_method: bgMethod as PreprocessingConfig['background_method'],
-                        resize_mode: 'padding',
-                        image_size: sz,
-                        normalization: 'imagenet',
-                        mean,
-                        std,
-                        params: null,
-                      },
-                      batch,
-                      seed,
-                      tm: tm as 'percentile' | 'absolute',
-                      tv,
-                    });
-                  }
+        for (const sz of sizes) {
+          const mean = IMAGENET_MEAN;
+          const std  = IMAGENET_STD;
+          for (const batch of batches) {
+            for (const seed of seeds) {
+              for (const tm of tMethods) {
+                for (const tv of tValues) {
+                  preCombos.push({
+                    pre: {
+                      method: preMethod as PreprocessingConfig['method'],
+                      background_method: bgMethod as PreprocessingConfig['background_method'],
+                      resize_mode: 'padding',
+                      image_size: sz,
+                      normalization: 'imagenet',
+                      mean,
+                      std,
+                      params: null,
+                    },
+                    batch,
+                    seed,
+                    tm: tm as 'percentile' | 'absolute',
+                    tv,
+                  });
                 }
               }
             }
@@ -353,7 +354,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
     return rows;
   }, [
-    modelTypes, preMethods, bgMethods, normMethods, imageSizes, batchSizes,
+    modelTypes, preMethods, bgMethods, imageSizes, batchSizes,
     randomSeeds, thresholdMethods, thresholdValues,
     effModelSizes, effOptimizers, effSchedulers, effOutChannels, effTrainSteps,
     effLRs, effPaddings, effPenalties, effWeightDecays, effAeLossWeights,
@@ -364,13 +365,12 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
   // 모델별 계산식
   const formulas = useMemo<FormulaModel[]>(() => {
-    if (modelTypes.length === 0 || preMethods.length === 0 || bgMethods.length === 0 || normMethods.length === 0) return [];
+    if (modelTypes.length === 0 || preMethods.length === 0 || bgMethods.length === 0) return [];
 
     // 공통 다차원 (count >= 2)
     const commonDims: Array<{ label: string; count: number }> = [];
     if (preMethods.length >= 2)      commonDims.push({ label: '전처리',        count: preMethods.length });
     if (bgMethods.length >= 2)       commonDims.push({ label: '배경분리',      count: bgMethods.length });
-    if (normMethods.length >= 2)     commonDims.push({ label: '정규화',        count: normMethods.length });
     if (imageSizes.length >= 2)      commonDims.push({ label: '이미지크기',    count: imageSizes.length });
     if (batchSizes.length >= 2)      commonDims.push({ label: '배치크기',      count: batchSizes.length });
     if (randomSeeds.length >= 2)     commonDims.push({ label: '랜덤시드',      count: randomSeeds.length });
@@ -433,7 +433,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
     return result;
   }, [
-    combos, modelTypes, preMethods, bgMethods, normMethods, imageSizes, batchSizes,
+    combos, modelTypes, preMethods, bgMethods, imageSizes, batchSizes,
     randomSeeds, thresholdMethods, thresholdValues,
     effModelSizes, effOptimizers, effSchedulers, effOutChannels, effTrainSteps,
     effLRs, effPaddings, effPenalties, effWeightDecays, effAeLossWeights,
@@ -441,6 +441,14 @@ export default function BatchExperimentForm({ preConfig }: Props) {
     effPenaltyBatches, effEarlyStoppings, effPatiences, effMinDeltas,
     pcBackbones, pcKernels, pcCoresets, pcMaxTrains, pcKnns, pcTopKs,
   ]);
+
+  function handleModelTypeToggle(mt: ModelType) {
+    const next = toggle(modelTypes, mt);
+    setModelTypes(next);
+    if (next.length > 0 && !next.includes(activeModelTab)) {
+      setActiveModelTab(next[0]);
+    }
+  }
 
   function handleAdd() {
     if (combos.length === 0) return;
@@ -454,16 +462,6 @@ export default function BatchExperimentForm({ preConfig }: Props) {
     return prev.includes(v) ? prev : [...prev, v].sort((a, b) => a - b);
   }
 
-  // 요약 섹션 헤더 표시 여부
-  const hasCommonMulti = ([preMethods, bgMethods, normMethods, imageSizes, batchSizes, randomSeeds, thresholdMethods, thresholdValues] as unknown as unknown[][]).some(a => a.length >= 2);
-  const hasEffMulti = modelTypes.includes('efficientad') &&
-    ([effModelSizes, effOptimizers, effSchedulers, effOutChannels, effTrainSteps, effLRs,
-      effPaddings, effPenalties, effWeightDecays, effAeLossWeights, effAeLrs, effAeWeightDecays,
-      effLrDecayEpochs, effLrDecayFactors, effPenaltyBatches, effEarlyStoppings, effPatiences, effMinDeltas] as unknown as unknown[][]).some(a => a.length >= 2);
-  const hasPcMulti = modelTypes.includes('patchcore') &&
-    ([pcBackbones, pcKernels, pcCoresets, pcMaxTrains, pcKnns, pcTopKs] as unknown as unknown[][]).some(a => a.length >= 2);
-
-  const hasSummary = formulas.some(f => f.dims.length > 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -474,7 +472,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
             <input
               type="checkbox"
               checked={modelTypes.includes(mt)}
-              onChange={() => setModelTypes((prev) => toggle(prev, mt))}
+              onChange={() => handleModelTypeToggle(mt)}
               className="cursor-pointer accent-sky-600"
             />
             <span className="text-sm font-medium text-slate-700">
@@ -490,7 +488,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
         <div className="flex flex-col gap-4">
           <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">공통 파라미터</h4>
 
-          <Field label="전처리 방식">
+          <Field label="전처리 방식" required>
             <CheckGroup
               options={['없음', 'Homomorphic', 'HE', 'CLAHE']}
               selected={preMethods}
@@ -498,19 +496,11 @@ export default function BatchExperimentForm({ preConfig }: Props) {
             />
           </Field>
 
-          <Field label="배경 분리">
+          <Field label="배경 분리" required>
             <CheckGroup
               options={['none', 'SAM2']}
               selected={bgMethods}
               onToggle={(opt) => setBgMethods((prev) => toggle(prev, opt))}
-            />
-          </Field>
-
-          <Field label="정규화 방식">
-            <CheckGroup
-              options={['ImageNet', '커스텀']}
-              selected={normMethods}
-              onToggle={(opt) => setNormMethods((prev) => toggle(prev, opt))}
             />
           </Field>
 
@@ -572,177 +562,195 @@ export default function BatchExperimentForm({ preConfig }: Props) {
           </div>
         </div>
 
-        {/* 모델 파라미터 */}
-        <div className="flex flex-col gap-6">
-          {modelTypes.includes('efficientad') && (
-            <div className="flex flex-col gap-4">
-              <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">EfficientAD 파라미터</h4>
-
-              <Field label="모델 크기">
-                <CheckGroup options={['small', 'medium']} selected={effModelSizes}
-                  onToggle={(opt) => setEffModelSizes((prev) => toggle(prev, opt))} />
-              </Field>
-              <Field label="옵티마이저">
-                <CheckGroup options={['adam', 'adamw', 'sgd']} selected={effOptimizers}
-                  onToggle={(opt) => setEffOptimizers((prev) => toggle(prev, opt))} />
-              </Field>
-              <Field label="스케줄러">
-                <CheckGroup options={['StepLR', 'CosineAnnealingLR']} selected={effSchedulers}
-                  onToggle={(opt) => setEffSchedulers((prev) => toggle(prev, opt))} />
-              </Field>
-              <Field label="출력 채널 수">
-                <CheckGroup options={['128', '256', '384', '512']} selected={effOutChannels}
-                  onToggle={(opt) => setEffOutChannels((prev) => toggle(prev, opt))} />
-              </Field>
-              <Field label="학습 단계 수 (train_steps)">
-                <TagInput
-                  values={effTrainSteps}
-                  onAdd={(v) => setEffTrainSteps((prev) => sortedAdd(prev, v))}
-                  onRemove={(v) => setEffTrainSteps((prev) => prev.filter((x) => x !== v))}
-                  defaultValue={70000} step={1000}
-                />
-              </Field>
-              <Field label="학습률 (learning_rate)">
-                <TagInput
-                  values={effLRs}
-                  onAdd={(v) => setEffLRs((prev) => sortedAdd(prev, v))}
-                  onRemove={(v) => setEffLRs((prev) => prev.filter((x) => x !== v))}
-                  defaultValue={0.0001} step={0.0001}
-                  fmt={(v) => v.toExponential(2)}
-                />
-              </Field>
-
-              <div>
-                <button type="button" onClick={() => setEffAdvOpen((o) => !o)}
-                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
-                  <span>{effAdvOpen ? '▾' : '▸'}</span>추가 EfficientAD 설정
-                </button>
-                {effAdvOpen && (
-                  <div className="mt-3 flex flex-col gap-4 pl-3 border-l-2 border-slate-100">
-                    <Field label="패딩 사용">
-                      <CheckGroup options={['True', 'False']} selected={effPaddings}
-                        onToggle={(opt) => setEffPaddings((prev) => toggle(prev, opt))} />
-                    </Field>
-                    <Field label="ImageNet Penalty">
-                      <CheckGroup options={['True', 'False']} selected={effPenalties}
-                        onToggle={(opt) => setEffPenalties((prev) => toggle(prev, opt))} />
-                    </Field>
-                    <Field label="가중치 감쇠 (weight_decay)">
-                      <TagInput values={effWeightDecays}
-                        onAdd={(v) => setEffWeightDecays((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffWeightDecays((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={0.0001} step={0.00001} fmt={(v) => v.toExponential(2)} />
-                    </Field>
-                    <Field label="AE Loss 비중 (ae_loss_weight)">
-                      <TagInput values={effAeLossWeights}
-                        onAdd={(v) => setEffAeLossWeights((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffAeLossWeights((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={0.5} step={0.05} />
-                    </Field>
-                    <Field label="AutoEncoder LR (autoencoder_lr)">
-                      <TagInput values={effAeLrs}
-                        onAdd={(v) => setEffAeLrs((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffAeLrs((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={0.0001} step={0.00001} fmt={(v) => v.toExponential(2)} />
-                    </Field>
-                    <Field label="AE 가중치 감쇠 (autoencoder_weight_decay)">
-                      <TagInput values={effAeWeightDecays}
-                        onAdd={(v) => setEffAeWeightDecays((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffAeWeightDecays((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={0.00001} step={0.000001} fmt={(v) => v.toExponential(2)} />
-                    </Field>
-                    <Field label="LR Decay Steps (lr_decay_epochs)">
-                      <TagInput values={effLrDecayEpochs}
-                        onAdd={(v) => setEffLrDecayEpochs((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffLrDecayEpochs((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={50000} step={1000} />
-                    </Field>
-                    <Field label="LR Decay Factor (lr_decay_factor)">
-                      <TagInput values={effLrDecayFactors}
-                        onAdd={(v) => setEffLrDecayFactors((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffLrDecayFactors((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={0.1} step={0.05} />
-                    </Field>
-                    <Field label="Penalty Batch Size (penalty_batch_size)">
-                      <TagInput values={effPenaltyBatches}
-                        onAdd={(v) => setEffPenaltyBatches((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffPenaltyBatches((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={8} step={1} />
-                    </Field>
-                    <Field label="Early Stopping">
-                      <CheckGroup options={['True', 'False']} selected={effEarlyStoppings}
-                        onToggle={(opt) => setEffEarlyStoppings((prev) => toggle(prev, opt))} />
-                    </Field>
-                    <Field label="Patience (patience)">
-                      <TagInput values={effPatiences}
-                        onAdd={(v) => setEffPatiences((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffPatiences((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={5000} step={500} />
-                    </Field>
-                    <Field label="Min Delta (min_delta)">
-                      <TagInput values={effMinDeltas}
-                        onAdd={(v) => setEffMinDeltas((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setEffMinDeltas((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={0.001} step={0.001} />
-                    </Field>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {modelTypes.includes('patchcore') && (
-            <div className="flex flex-col gap-4">
-              <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">PatchCore 파라미터</h4>
-
-              <Field label="백본">
-                <CheckGroup options={['wide_resnet50_2', 'resnet18', 'resnet50']} selected={pcBackbones}
-                  onToggle={(opt) => setPcBackbones((prev) => toggle(prev, opt))} />
-              </Field>
-              <Field label="이웃 커널 크기">
-                <CheckGroup options={['1', '3', '5', '7', '9']} selected={pcKernels}
-                  onToggle={(opt) => setPcKernels((prev) => toggle(prev, opt))} />
-              </Field>
-              <Field label="코어셋 비율 (coreset_sampling_ratio)">
-                <TagInput values={pcCoresets}
-                  onAdd={(v) => setPcCoresets((prev) => sortedAdd(prev, v))}
-                  onRemove={(v) => setPcCoresets((prev) => prev.filter((x) => x !== v))}
-                  defaultValue={0.1} step={0.01} />
-              </Field>
-
-              <div>
-                <button type="button" onClick={() => setPcAdvOpen((o) => !o)}
-                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
-                  <span>{pcAdvOpen ? '▾' : '▸'}</span>추가 PatchCore 설정
-                </button>
-                {pcAdvOpen && (
-                  <div className="mt-3 flex flex-col gap-4 pl-3 border-l-2 border-slate-100">
-                    <Field label="최대 학습 샘플 (max_train)">
-                      <TagInput values={pcMaxTrains}
-                        onAdd={(v) => setPcMaxTrains((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setPcMaxTrains((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={1000} step={100} />
-                    </Field>
-                    <Field label="k-NN 이웃 수 (knn)">
-                      <TagInput values={pcKnns}
-                        onAdd={(v) => setPcKnns((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setPcKnns((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={9} step={1} />
-                    </Field>
-                    <Field label="Top-k 비율 (top_k_ratio)">
-                      <TagInput values={pcTopKs}
-                        onAdd={(v) => setPcTopKs((prev) => sortedAdd(prev, v))}
-                        onRemove={(v) => setPcTopKs((prev) => prev.filter((x) => x !== v))}
-                        defaultValue={0.1} step={0.01} />
-                    </Field>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {modelTypes.length === 0 && (
+        {/* 모델 파라미터 - 탭 */}
+        <div className="flex flex-col gap-4">
+          {modelTypes.length === 0 ? (
             <p className="text-xs text-slate-400">모델을 선택하세요.</p>
+          ) : (
+            <>
+              {/* 탭 헤더 */}
+              <div className="flex border-b border-slate-200">
+                {(['efficientad', 'patchcore'] as const)
+                  .filter((mt) => modelTypes.includes(mt))
+                  .map((mt) => (
+                    <button
+                      key={mt}
+                      type="button"
+                      onClick={() => setActiveModelTab(mt)}
+                      className={`pb-2 px-1 mr-5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+                        activeModelTab === mt
+                          ? 'border-sky-600 text-sky-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {mt === 'efficientad' ? 'EfficientAD' : 'PatchCore'}
+                    </button>
+                  ))}
+              </div>
+
+              {/* EfficientAD 탭 콘텐츠 */}
+              {activeModelTab === 'efficientad' && (
+                <div className="flex flex-col gap-4">
+                  <Field label="모델 크기">
+                    <CheckGroup options={['small', 'medium']} selected={effModelSizes}
+                      onToggle={(opt) => setEffModelSizes((prev) => toggle(prev, opt))} />
+                  </Field>
+                  <Field label="옵티마이저">
+                    <CheckGroup options={['adam', 'adamw', 'sgd']} selected={effOptimizers}
+                      onToggle={(opt) => setEffOptimizers((prev) => toggle(prev, opt))} />
+                  </Field>
+                  <Field label="스케줄러">
+                    <CheckGroup options={['StepLR', 'CosineAnnealingLR']} selected={effSchedulers}
+                      onToggle={(opt) => setEffSchedulers((prev) => toggle(prev, opt))} />
+                  </Field>
+                  <Field label="출력 채널 수">
+                    <CheckGroup options={['128', '256', '384', '512']} selected={effOutChannels}
+                      onToggle={(opt) => setEffOutChannels((prev) => toggle(prev, opt))} />
+                  </Field>
+                  <Field label="학습 단계 수 (train_steps)">
+                    <TagInput
+                      values={effTrainSteps}
+                      onAdd={(v) => setEffTrainSteps((prev) => sortedAdd(prev, v))}
+                      onRemove={(v) => setEffTrainSteps((prev) => prev.filter((x) => x !== v))}
+                      defaultValue={70000} step={1000}
+                    />
+                  </Field>
+                  <Field label="학습률 (learning_rate)">
+                    <TagInput
+                      values={effLRs}
+                      onAdd={(v) => setEffLRs((prev) => sortedAdd(prev, v))}
+                      onRemove={(v) => setEffLRs((prev) => prev.filter((x) => x !== v))}
+                      defaultValue={0.0001} step={0.0001}
+                      fmt={(v) => v.toExponential(2)}
+                    />
+                  </Field>
+                  <div>
+                    <button type="button" onClick={() => setEffAdvOpen((o) => !o)}
+                      className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
+                      <span>{effAdvOpen ? '▾' : '▸'}</span>추가 EfficientAD 설정
+                    </button>
+                    {effAdvOpen && (
+                      <div className="mt-3 flex flex-col gap-4 pl-3 border-l-2 border-slate-100">
+                        <Field label="패딩 사용">
+                          <CheckGroup options={['True', 'False']} selected={effPaddings}
+                            onToggle={(opt) => setEffPaddings((prev) => toggle(prev, opt))} />
+                        </Field>
+                        <Field label="ImageNet Penalty">
+                          <CheckGroup options={['True', 'False']} selected={effPenalties}
+                            onToggle={(opt) => setEffPenalties((prev) => toggle(prev, opt))} />
+                        </Field>
+                        <Field label="가중치 감쇠 (weight_decay)">
+                          <TagInput values={effWeightDecays}
+                            onAdd={(v) => setEffWeightDecays((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffWeightDecays((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={0.0001} step={0.00001} fmt={(v) => v.toExponential(2)} />
+                        </Field>
+                        <Field label="AE Loss 비중 (ae_loss_weight)">
+                          <TagInput values={effAeLossWeights}
+                            onAdd={(v) => setEffAeLossWeights((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffAeLossWeights((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={0.5} step={0.05} />
+                        </Field>
+                        <Field label="AutoEncoder LR (autoencoder_lr)">
+                          <TagInput values={effAeLrs}
+                            onAdd={(v) => setEffAeLrs((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffAeLrs((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={0.0001} step={0.00001} fmt={(v) => v.toExponential(2)} />
+                        </Field>
+                        <Field label="AE 가중치 감쇠 (autoencoder_weight_decay)">
+                          <TagInput values={effAeWeightDecays}
+                            onAdd={(v) => setEffAeWeightDecays((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffAeWeightDecays((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={0.00001} step={0.000001} fmt={(v) => v.toExponential(2)} />
+                        </Field>
+                        <Field label="LR Decay Steps (lr_decay_epochs)">
+                          <TagInput values={effLrDecayEpochs}
+                            onAdd={(v) => setEffLrDecayEpochs((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffLrDecayEpochs((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={50000} step={1000} />
+                        </Field>
+                        <Field label="LR Decay Factor (lr_decay_factor)">
+                          <TagInput values={effLrDecayFactors}
+                            onAdd={(v) => setEffLrDecayFactors((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffLrDecayFactors((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={0.1} step={0.05} />
+                        </Field>
+                        <Field label="Penalty Batch Size (penalty_batch_size)">
+                          <TagInput values={effPenaltyBatches}
+                            onAdd={(v) => setEffPenaltyBatches((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffPenaltyBatches((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={8} step={1} />
+                        </Field>
+                        <Field label="Early Stopping">
+                          <CheckGroup options={['True', 'False']} selected={effEarlyStoppings}
+                            onToggle={(opt) => setEffEarlyStoppings((prev) => toggle(prev, opt))} />
+                        </Field>
+                        <Field label="Patience (patience)">
+                          <TagInput values={effPatiences}
+                            onAdd={(v) => setEffPatiences((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffPatiences((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={5000} step={500} />
+                        </Field>
+                        <Field label="Min Delta (min_delta)">
+                          <TagInput values={effMinDeltas}
+                            onAdd={(v) => setEffMinDeltas((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setEffMinDeltas((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={0.001} step={0.001} />
+                        </Field>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* PatchCore 탭 콘텐츠 */}
+              {activeModelTab === 'patchcore' && (
+                <div className="flex flex-col gap-4">
+                  <Field label="백본">
+                    <CheckGroup options={['wide_resnet50_2', 'resnet18', 'resnet50']} selected={pcBackbones}
+                      onToggle={(opt) => setPcBackbones((prev) => toggle(prev, opt))} />
+                  </Field>
+                  <Field label="이웃 커널 크기">
+                    <CheckGroup options={['1', '3', '5', '7', '9']} selected={pcKernels}
+                      onToggle={(opt) => setPcKernels((prev) => toggle(prev, opt))} />
+                  </Field>
+                  <Field label="코어셋 비율 (coreset_sampling_ratio)">
+                    <TagInput values={pcCoresets}
+                      onAdd={(v) => setPcCoresets((prev) => sortedAdd(prev, v))}
+                      onRemove={(v) => setPcCoresets((prev) => prev.filter((x) => x !== v))}
+                      defaultValue={0.1} step={0.01} />
+                  </Field>
+                  <div>
+                    <button type="button" onClick={() => setPcAdvOpen((o) => !o)}
+                      className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
+                      <span>{pcAdvOpen ? '▾' : '▸'}</span>추가 PatchCore 설정
+                    </button>
+                    {pcAdvOpen && (
+                      <div className="mt-3 flex flex-col gap-4 pl-3 border-l-2 border-slate-100">
+                        <Field label="최대 학습 샘플 (max_train)">
+                          <TagInput values={pcMaxTrains}
+                            onAdd={(v) => setPcMaxTrains((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setPcMaxTrains((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={1000} step={100} />
+                        </Field>
+                        <Field label="k-NN 이웃 수 (knn)">
+                          <TagInput values={pcKnns}
+                            onAdd={(v) => setPcKnns((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setPcKnns((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={9} step={1} />
+                        </Field>
+                        <Field label="Top-k 비율 (top_k_ratio)">
+                          <TagInput values={pcTopKs}
+                            onAdd={(v) => setPcTopKs((prev) => sortedAdd(prev, v))}
+                            onRemove={(v) => setPcTopKs((prev) => prev.filter((x) => x !== v))}
+                            defaultValue={0.1} step={0.01} />
+                        </Field>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -760,61 +768,52 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
         {combos.length > 0 ? (
           <>
-            {hasSummary && (
-              <div className="rounded-xl border border-slate-200 p-4 flex flex-col gap-2 max-h-64 overflow-y-auto">
-                {hasCommonMulti && (
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide pb-1">공통</p>
-                )}
-                <SummaryRow label="전처리" values={preMethods} />
-                <SummaryRow label="배경분리" values={bgMethods} />
-                <SummaryRow label="정규화" values={normMethods} />
-                <SummaryRow label="이미지크기" values={ns(imageSizes)} />
-                <SummaryRow label="배치크기" values={ns(batchSizes)} />
-                <SummaryRow label="랜덤시드" values={ns(randomSeeds)} />
-                <SummaryRow label="Threshold방식" values={thresholdMethods} />
-                <SummaryRow label="Threshold값" values={ns(thresholdValues)} />
+            <div className="rounded-xl border border-slate-200 p-4 flex flex-col gap-2 max-h-64 overflow-y-auto">
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide pb-1">공통</p>
+              <SummaryRow label="전처리" values={preMethods} alwaysShow />
+              <SummaryRow label="배경분리" values={bgMethods} alwaysShow />
+              <SummaryRow label="이미지크기" values={ns(imageSizes)} />
+              <SummaryRow label="배치크기" values={ns(batchSizes)} />
+              <SummaryRow label="랜덤시드" values={ns(randomSeeds)} />
+              <SummaryRow label="Threshold방식" values={thresholdMethods} />
+              <SummaryRow label="Threshold값" values={ns(thresholdValues)} />
 
-                {hasEffMulti && (
+              {modelTypes.includes('efficientad') && (
+                <>
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide pb-1 pt-2">EfficientAD</p>
-                )}
-                {modelTypes.includes('efficientad') && (
-                  <>
-                    <SummaryRow label="모델크기" values={effModelSizes} />
-                    <SummaryRow label="Optimizer" values={effOptimizers} />
-                    <SummaryRow label="스케줄러" values={effSchedulers} />
-                    <SummaryRow label="출력채널" values={effOutChannels} />
-                    <SummaryRow label="Train Steps" values={ns(effTrainSteps, v => v.toLocaleString())} />
-                    <SummaryRow label="LR" values={ns(effLRs, v => v.toExponential(2))} />
-                    <SummaryRow label="패딩" values={effPaddings} />
-                    <SummaryRow label="ImageNet Penalty" values={effPenalties} />
-                    <SummaryRow label="weight_decay" values={ns(effWeightDecays, v => v.toExponential(2))} />
-                    <SummaryRow label="ae_loss_weight" values={ns(effAeLossWeights)} />
-                    <SummaryRow label="autoencoder_lr" values={ns(effAeLrs, v => v.toExponential(2))} />
-                    <SummaryRow label="ae_weight_decay" values={ns(effAeWeightDecays, v => v.toExponential(2))} />
-                    <SummaryRow label="lr_decay_steps" values={ns(effLrDecayEpochs, v => v.toLocaleString())} />
-                    <SummaryRow label="lr_decay_factor" values={ns(effLrDecayFactors)} />
-                    <SummaryRow label="penalty_batch" values={ns(effPenaltyBatches)} />
-                    <SummaryRow label="Early Stopping" values={effEarlyStoppings} />
-                    <SummaryRow label="patience" values={ns(effPatiences, v => v.toLocaleString())} />
-                    <SummaryRow label="min_delta" values={ns(effMinDeltas)} />
-                  </>
-                )}
+                  <SummaryRow label="모델크기" values={effModelSizes} />
+                  <SummaryRow label="Optimizer" values={effOptimizers} />
+                  <SummaryRow label="스케줄러" values={effSchedulers} />
+                  <SummaryRow label="출력채널" values={effOutChannels} />
+                  <SummaryRow label="Train Steps" values={ns(effTrainSteps, v => v.toLocaleString())} />
+                  <SummaryRow label="LR" values={ns(effLRs, v => v.toExponential(2))} />
+                  <SummaryRow label="패딩" values={effPaddings} />
+                  <SummaryRow label="ImageNet Penalty" values={effPenalties} />
+                  <SummaryRow label="weight_decay" values={ns(effWeightDecays, v => v.toExponential(2))} />
+                  <SummaryRow label="ae_loss_weight" values={ns(effAeLossWeights)} />
+                  <SummaryRow label="autoencoder_lr" values={ns(effAeLrs, v => v.toExponential(2))} />
+                  <SummaryRow label="ae_weight_decay" values={ns(effAeWeightDecays, v => v.toExponential(2))} />
+                  <SummaryRow label="lr_decay_steps" values={ns(effLrDecayEpochs, v => v.toLocaleString())} />
+                  <SummaryRow label="lr_decay_factor" values={ns(effLrDecayFactors)} />
+                  <SummaryRow label="penalty_batch" values={ns(effPenaltyBatches)} />
+                  <SummaryRow label="Early Stopping" values={effEarlyStoppings} />
+                  <SummaryRow label="patience" values={ns(effPatiences, v => v.toLocaleString())} />
+                  <SummaryRow label="min_delta" values={ns(effMinDeltas)} />
+                </>
+              )}
 
-                {hasPcMulti && (
+              {modelTypes.includes('patchcore') && (
+                <>
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide pb-1 pt-2">PatchCore</p>
-                )}
-                {modelTypes.includes('patchcore') && (
-                  <>
-                    <SummaryRow label="백본" values={pcBackbones} />
-                    <SummaryRow label="이웃커널크기" values={pcKernels} />
-                    <SummaryRow label="coreset_ratio" values={ns(pcCoresets)} />
-                    <SummaryRow label="max_train" values={ns(pcMaxTrains, v => v.toLocaleString())} />
-                    <SummaryRow label="knn" values={ns(pcKnns)} />
-                    <SummaryRow label="top_k_ratio" values={ns(pcTopKs)} />
-                  </>
-                )}
-              </div>
-            )}
+                  <SummaryRow label="백본" values={pcBackbones} />
+                  <SummaryRow label="이웃커널크기" values={pcKernels} />
+                  <SummaryRow label="coreset_ratio" values={ns(pcCoresets)} />
+                  <SummaryRow label="max_train" values={ns(pcMaxTrains, v => v.toLocaleString())} />
+                  <SummaryRow label="knn" values={ns(pcKnns)} />
+                  <SummaryRow label="top_k_ratio" values={ns(pcTopKs)} />
+                </>
+              )}
+            </div>
 
             {/* 계산식 + 버튼 */}
             <div className="flex items-end justify-between gap-3">

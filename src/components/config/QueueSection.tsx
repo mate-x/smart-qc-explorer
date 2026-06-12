@@ -8,6 +8,7 @@ import ConfirmModal from '../common/ConfirmModal';
 
 const EFF_COL_COUNT = 18;
 const PC_COL_COUNT = 6;
+const PAGE_SIZE = 10;
 
 const thCls = 'px-2 py-2 text-left text-xs font-semibold text-slate-500 whitespace-nowrap bg-slate-50 border-b border-slate-200';
 const thGroupCls = `${thCls} cursor-pointer select-none hover:bg-slate-100 transition-colors border-l border-slate-200`;
@@ -21,6 +22,7 @@ export default function QueueSection() {
   const { commonOpen, efficientadOpen, patchcoreOpen,
           setCommonOpen, setEfficientadOpen, setPatchcoreOpen } = useQueueColumnStore();
 
+  const [page, setPage] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -201,21 +203,22 @@ export default function QueueSection() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {localItems.map((item, idx) => {
+                  {localItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((item, localIdx) => {
+                    const globalIdx = page * PAGE_SIZE + localIdx;
                     const pre = item.preprocessing_config;
                     const mc = item.model_config;
-                    const isSelected = selectedIndex === idx;
+                    const isSelected = selectedIndex === globalIdx;
                     const stickyBg = isSelected ? 'bg-sky-50' : 'bg-white group-hover:bg-slate-50';
 
                     return (
                       <tr
-                        key={idx}
-                        onClick={() => setSelectedIndex((prev) => (prev === idx ? null : idx))}
+                        key={globalIdx}
+                        onClick={() => setSelectedIndex((prev) => (prev === globalIdx ? null : globalIdx))}
                         className={`group cursor-pointer transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
                       >
                         {/* 고정 열 */}
                         <td className={`sticky left-0 z-[1] w-[2.5rem] px-2 py-2 text-slate-400 ${stickyBg}`}>
-                          <span className="truncate block">{idx + 1}</span>
+                          <span className="truncate block">{globalIdx + 1}</span>
                         </td>
                         <td className={`sticky left-10 z-[1] w-[6rem] px-2 py-2 font-mono text-slate-700 ${stickyBg}`}>
                           <span className="truncate block">{mc.model_type}</span>
@@ -302,16 +305,19 @@ export default function QueueSection() {
                           className={`sticky right-0 z-[1] px-2 py-2 ${stickyBg}`}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {confirmDeleteIndex === idx ? (
+                          {confirmDeleteIndex === globalIdx ? (
                             <span className="flex gap-1.5 items-center">
                               <button
                                 type="button"
                                 onClick={() => {
-                                  deleteLocalItem(idx);
+                                  deleteLocalItem(globalIdx);
                                   setConfirmDeleteIndex(null);
-                                  if (selectedIndex === idx) setSelectedIndex(null);
-                                  else if (selectedIndex !== null && selectedIndex > idx)
+                                  if (selectedIndex === globalIdx) setSelectedIndex(null);
+                                  else if (selectedIndex !== null && selectedIndex > globalIdx)
                                     setSelectedIndex(selectedIndex - 1);
+                                  const newLen = localItems.length - 1;
+                                  const newTotal = Math.ceil(newLen / PAGE_SIZE);
+                                  if (newTotal > 0 && page >= newTotal) setPage(newTotal - 1);
                                 }}
                                 className="text-red-600 hover:underline cursor-pointer text-xs"
                               >확인</button>
@@ -324,7 +330,7 @@ export default function QueueSection() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setConfirmDeleteIndex(idx)}
+                              onClick={() => setConfirmDeleteIndex(globalIdx)}
                               className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
                             >삭제</button>
                           )}
@@ -337,14 +343,37 @@ export default function QueueSection() {
             </div>
           </div>
 
+          {/* 페이지네이션 */}
+          {localItems.length > PAGE_SIZE && (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >이전</button>
+              <span className="text-xs text-slate-500">
+                {page + 1} / {Math.ceil(localItems.length / PAGE_SIZE)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(Math.ceil(localItems.length / PAGE_SIZE) - 1, p + 1))}
+                disabled={page >= Math.ceil(localItems.length / PAGE_SIZE) - 1}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >다음</button>
+            </div>
+          )}
+
           {/* 순서 변경 버튼 */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => {
                 if (selectedIndex === null) return;
+                const newIdx = selectedIndex - 1;
                 reorderLocalItem(selectedIndex, 'up');
-                setSelectedIndex(selectedIndex - 1);
+                setSelectedIndex(newIdx);
+                if (newIdx < page * PAGE_SIZE) setPage(page - 1);
               }}
               disabled={selectedIndex === null || selectedIndex === 0}
               className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
@@ -353,8 +382,10 @@ export default function QueueSection() {
               type="button"
               onClick={() => {
                 if (selectedIndex === null) return;
+                const newIdx = selectedIndex + 1;
                 reorderLocalItem(selectedIndex, 'down');
-                setSelectedIndex(selectedIndex + 1);
+                setSelectedIndex(newIdx);
+                if (newIdx >= (page + 1) * PAGE_SIZE) setPage(page + 1);
               }}
               disabled={selectedIndex === null || selectedIndex === localItems.length - 1}
               className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
