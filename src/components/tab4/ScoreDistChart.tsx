@@ -26,20 +26,14 @@ function scoreDistBins(
   return bins;
 }
 
-function normThreshold(scores: number[], threshold: number): number | null {
-  if (scores.length === 0) return null;
-  const min = Math.min(...scores);
-  const max = Math.max(...scores);
-  if (max <= min) return null;
-  return (threshold - min) / (max - min);
-}
-
 export default function ScoreDistChart({
   metrics,
   thresholdValue,
+  onThresholdChange,
 }: {
   metrics: ExperimentMetrics;
   thresholdValue?: number;
+  onThresholdChange?: (normalizedTh: number) => void;
 }) {
   const scores = metrics.anomaly_scores ?? [];
   const labels = metrics.image_labels ?? [];
@@ -47,7 +41,8 @@ export default function ScoreDistChart({
   if (scores.length === 0) return <p className="text-xs text-gray-400">Score 데이터 없음</p>;
 
   const bins = scoreDistBins(scores, labels);
-  const normTh = thresholdValue != null ? normThreshold(scores, thresholdValue) : null;
+  // thresholdValue는 normalized(0~1) 기준으로 직접 사용
+  const normTh = thresholdValue ?? null;
 
   return (
     <div>
@@ -79,6 +74,23 @@ export default function ScoreDistChart({
           )}
         </BarChart>
       </ResponsiveContainer>
+      {onThresholdChange && normTh != null && (
+        <div className="flex items-center gap-2 mt-2 px-1">
+          <label className="text-xs text-gray-500 whitespace-nowrap">Threshold</label>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={normTh}
+            onChange={e => onThresholdChange(parseFloat(e.target.value))}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+            {normTh.toFixed(2)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

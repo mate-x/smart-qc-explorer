@@ -18,6 +18,7 @@ export default function ExportSection({ expId, threshold, defectClass }: Props) 
   const [csvError, setCsvError] = useState<string | null>(null);
   const [zipLoading, setZipLoading] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
+  const [verdictFilter, setVerdictFilter] = useState<'전체' | 'OK' | 'NG'>('전체');
 
   const cls = defectClass !== '전체' ? defectClass : undefined;
 
@@ -43,7 +44,7 @@ export default function ExportSection({ expId, threshold, defectClass }: Props) 
     setZipLoading(true);
     setZipError(null);
     try {
-      const prepRes = await prepareZip(expId, threshold, cls ?? '전체');
+      const prepRes = await prepareZip(expId, threshold, cls, verdictFilter);
       const jobId = prepRes.data.job_id;
       let done = false;
       while (!done) {
@@ -72,6 +73,25 @@ export default function ExportSection({ expId, threshold, defectClass }: Props) 
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold text-gray-700">결과 내보내기</h3>
+
+      {/* verdict 필터 */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-slate-500">대상:</span>
+        {(['전체', 'OK', 'NG'] as const).map(v => (
+          <label key={v} className="flex items-center gap-1 text-xs cursor-pointer">
+            <input
+              type="radio"
+              name="verdict-filter"
+              value={v}
+              checked={verdictFilter === v}
+              onChange={() => setVerdictFilter(v)}
+              className="accent-sky-600"
+            />
+            {v === '전체' ? '모두' : v === 'OK' ? '정상(OK)' : '이상(NG)'}
+          </label>
+        ))}
+      </div>
+
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={handleCsv}

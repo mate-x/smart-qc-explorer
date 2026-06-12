@@ -4,7 +4,8 @@ import {
   getTripletImageUrl,
   getOriginalImageUrl,
   getGtMaskImageUrl,
-  getHeatmapImageUrl,
+  getOverlayImageUrl,
+  getPredictedMaskImageUrl,
 } from '../../api/anomalyMapApi';
 
 const PAGE_SIZE = 20;
@@ -66,6 +67,7 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
                 key={img.image_path}
                 img={img}
                 expId={expId}
+                threshold={threshold}
                 isSelected={selectedImage?.image_path === img.image_path}
                 onClick={() => handleCardClick(img)}
               />
@@ -94,7 +96,7 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
         </>
       )}
 
-      {/* 하단 3-panel 상세 패널 */}
+      {/* 하단 상세 패널 */}
       {selectedImage && (
         <div ref={panelRef}>
           <DetailPanel
@@ -114,11 +116,12 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
 interface CardProps {
   img: AnomalyImage;
   expId: string;
+  threshold: number;
   isSelected: boolean;
   onClick: () => void;
 }
 
-function ImageCard({ img, expId, isSelected, onClick }: CardProps) {
+function ImageCard({ img, expId, threshold, isSelected, onClick }: CardProps) {
   const badgeClass = CLS_BADGE[img.classification] ?? 'bg-gray-100 text-gray-700 border-gray-300';
   return (
     <div
@@ -129,7 +132,7 @@ function ImageCard({ img, expId, isSelected, onClick }: CardProps) {
     >
       <div className="bg-gray-100 flex items-center justify-center min-h-20">
         <img
-          src={getTripletImageUrl(expId, img.image_path)}
+          src={getTripletImageUrl(expId, img.image_path, threshold)}
           alt={img.image_name}
           className="w-full object-contain"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
@@ -161,10 +164,7 @@ interface DetailPanelProps {
 }
 
 function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
-  const [gtMaskError, setGtMaskError] = useState(false);
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => { setGtMaskError(false); }, [img.image_path]);
 
   const verdict = img.anomaly_score >= threshold ? 'NG' : 'OK';
   const stem = img.image_name.replace(/\.[^/.]+$/, '');
@@ -172,7 +172,7 @@ function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
   async function handleDownload() {
     setDownloading(true);
     try {
-      const res = await fetch(getTripletImageUrl(expId, img.image_path));
+      const res = await fetch(getTripletImageUrl(expId, img.image_path, threshold));
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -200,34 +200,26 @@ function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
 
       <p className="text-xs text-slate-500 -mt-2">{img.image_name}</p>
 
-      {/* 3-panel */}
-      <div className="grid grid-cols-3 gap-3">
-        <PanelImage
-          label="원본 이미지"
-          src={getOriginalImageUrl(expId, img.image_path)}
-          alt="원본 이미지"
-        />
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-slate-500 font-medium">GT 마스크</p>
-          {gtMaskError ? (
-            <div className="flex-1 bg-slate-200 rounded flex items-center justify-center min-h-32">
-              <p className="text-xs text-slate-400">GT 마스크 없음</p>
-            </div>
-          ) : (
-            <img
-              src={getGtMaskImageUrl(expId, img.image_path)}
-              alt="GT 마스크"
-              className="w-full rounded object-contain bg-slate-100"
-              onError={() => setGtMaskError(true)}
-            />
-          )}
+      {/* GT 있을 때: 2×2 그리드 */}
+      {img.has_gt_mask ? (
+        <div className="grid grid-cols-2 gap-3">
+          <PanelImage label="원본 이미지" src={getOriginalImageUrl(expId, img.image_path)} alt="원본 이미지" />
+          <PanelImage label="Overlay" src={getOverlayImageUrl(expId, img.image_path, threshold)} alt="Overlay" />
+          <PanelImage label="GT 마스크" src={getGtMaskImageUrl(expId, img.image_path)} alt="GT 마스크" />
+          <PanelImage label="Predicted Mask" src={getPredictedMaskImageUrl(expId, img.image_path, threshold)} alt="Predicted Mask" />
         </div>
-        <PanelImage
-          label="Anomaly Heatmap (윤곽선 오버레이)"
-          src={getHeatmapImageUrl(expId, img.image_path)}
-          alt="Anomaly Heatmap"
-        />
-      </div>
+      ) : (
+        /* GT 없을 때: 3-panel 1행 */
+        <div className="grid grid-cols-3 gap-3">
+          <PanelImage label="원본 이미지" src={getOriginalImageUrl(expId, img.image_path)} alt="원본 이미지" />
+          <PanelImage label="Overlay" src={getOverlayImageUrl(expId, img.image_path, threshold)} alt="Overlay" />
+          <PanelImage label="Predicted Mask" src={getPredictedMaskImageUrl(expId, img.image_path, threshold)} alt="Predicted Mask" />
+        </div>
+      )}
+
+      {!img.has_gt_mask && (
+        <p className="text-xs text-slate-400">GT 마스크 없음</p>
+      )}
 
       {/* 메트릭 */}
       <div className="grid grid-cols-3 gap-3">
