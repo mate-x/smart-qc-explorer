@@ -115,6 +115,34 @@ export default function Tab4Experiments() {
     setLocalThreshold(computeInitialThreshold(selected));
   }, [selected?.experiment_id]);
 
+  // localThreshold 기반 지표 실시간 재계산
+  const recomputed = useMemo(() => {
+    const scores = selected?.metrics?.anomaly_scores ?? [];
+    const labels = selected?.metrics?.image_labels ?? [];
+    if (localThreshold == null || scores.length === 0 || labels.length !== scores.length) return null;
+    const sMin = Math.min(...scores);
+    const sMax = Math.max(...scores);
+    const rawTh = sMax > sMin ? sMin + localThreshold * (sMax - sMin) : sMin;
+    let tp = 0, fp = 0, tn = 0, fn = 0;
+    for (let i = 0; i < scores.length; i++) {
+      const pred = scores[i] >= rawTh ? 1 : 0;
+      if (labels[i] === 1 && pred === 1) tp++;
+      else if (labels[i] === 0 && pred === 1) fp++;
+      else if (labels[i] === 0 && pred === 0) tn++;
+      else fn++;
+    }
+    const n = tp + fp + tn + fn;
+    const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
+    const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
+    return {
+      accuracy:  n > 0 ? (tp + tn) / n : 0,
+      precision,
+      recall,
+      f1_score:  precision + recall > 0 ? 2 * precision * recall / (precision + recall) : 0,
+      f2_score:  precision + recall > 0 ? 5 * precision * recall / (4 * precision + recall) : 0,
+    };
+  }, [localThreshold, selected?.experiment_id]);
+
   async function handleBuild() {
     if (!selected) return;
     setBuilding(true);
@@ -226,11 +254,11 @@ export default function Tab4Experiments() {
                     <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{e.name}</td>
                     <td className="px-4 py-3 text-slate-600">{e.model_type}</td>
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{paramSummary(e)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(m?.accuracy) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(m?.precision) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(m?.recall) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(m?.f1_score) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(m?.f2_score) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.accuracy  : m?.accuracy)  : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.precision : m?.precision) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.recall    : m?.recall)    : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.f1_score  : m?.f1_score)  : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.f2_score  : m?.f2_score)  : '—'}</td>
                     <td className="px-4 py-3 text-right font-mono font-semibold text-slate-800">{isCompleted ? fmt(m?.auc) : '—'}</td>
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{e.created_at.slice(0, 19).replace('T', ' ')}</td>
                     <td className="px-4 py-3">
@@ -266,10 +294,10 @@ export default function Tab4Experiments() {
           {/* 지표 카드 */}
           <div className="grid grid-cols-4 gap-4">
             {([
-              { label: 'Accuracy', value: selected.metrics.accuracy },
-              { label: 'Precision', value: selected.metrics.precision },
-              { label: 'Recall', value: selected.metrics.recall },
-              { label: 'F1 Score', value: selected.metrics.f1_score },
+              { label: 'Accuracy', value: recomputed?.accuracy ?? selected.metrics.accuracy },
+              { label: 'Precision', value: recomputed?.precision ?? selected.metrics.precision },
+              { label: 'Recall',   value: recomputed?.recall   ?? selected.metrics.recall },
+              { label: 'F1 Score', value: recomputed?.f1_score ?? selected.metrics.f1_score },
             ] as const).map(({ label, value }) => (
               <div key={label} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
                 <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
@@ -280,8 +308,8 @@ export default function Tab4Experiments() {
 
           {/* 차트 3열 */}
           <div className="grid grid-cols-3 gap-4">
-            <ConfusionMatrixChart metrics={selected.metrics} />
-            <RocCurveChart metrics={selected.metrics} />
+            <ConfusionMatrixChart metrics={selected.metrics} threshold={localThreshold ?? undefined} />
+            <RocCurveChart metrics={selected.metrics} threshold={localThreshold ?? undefined} />
             <ScoreDistChart
               metrics={selected.metrics}
               thresholdValue={localThreshold ?? undefined}

@@ -1,7 +1,38 @@
 import type { ExperimentMetrics } from '../../types/experiments';
 
-export default function ConfusionMatrixChart({ metrics }: { metrics: ExperimentMetrics }) {
-  const cm = metrics.confusion_matrix;
+function recomputeCM(
+  scores: number[],
+  labels: number[],
+  normalizedTh: number,
+): { tp: number; fp: number; tn: number; fn: number } {
+  const sMin = Math.min(...scores);
+  const sMax = Math.max(...scores);
+  const rawTh = sMax > sMin ? sMin + normalizedTh * (sMax - sMin) : sMin;
+  let tp = 0, fp = 0, tn = 0, fn = 0;
+  for (let i = 0; i < scores.length; i++) {
+    const pred = scores[i] >= rawTh ? 1 : 0;
+    if (labels[i] === 1 && pred === 1) tp++;
+    else if (labels[i] === 0 && pred === 1) fp++;
+    else if (labels[i] === 0 && pred === 0) tn++;
+    else fn++;
+  }
+  return { tp, fp, tn, fn };
+}
+
+export default function ConfusionMatrixChart({
+  metrics,
+  threshold,
+}: {
+  metrics: ExperimentMetrics;
+  threshold?: number;
+}) {
+  const scores = metrics.anomaly_scores ?? [];
+  const labels = metrics.image_labels ?? [];
+  const canRecompute = threshold != null && scores.length > 0 && labels.length === scores.length;
+  const cm = canRecompute
+    ? recomputeCM(scores, labels, threshold!)
+    : metrics.confusion_matrix;
+
   if (!cm) return <p className="text-xs text-gray-400">데이터 없음</p>;
 
   return (

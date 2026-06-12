@@ -1,5 +1,5 @@
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceDot,
 } from 'recharts';
 import type { ExperimentMetrics } from '../../types/experiments';
 
@@ -28,7 +28,13 @@ function computeRocCurve(
   return { data, auc };
 }
 
-export default function RocCurveChart({ metrics }: { metrics: ExperimentMetrics }) {
+export default function RocCurveChart({
+  metrics,
+  threshold,
+}: {
+  metrics: ExperimentMetrics;
+  threshold?: number;
+}) {
   const scores = metrics.anomaly_scores ?? [];
   const labels = metrics.image_labels ?? [];
 
@@ -39,6 +45,21 @@ export default function RocCurveChart({ metrics }: { metrics: ExperimentMetrics 
   const step = Math.max(1, Math.floor(data.length / 200));
   const sampled = data.filter((_, i) => i % step === 0 || i === data.length - 1);
   const randomLine = [{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }];
+
+  // 현재 threshold에 해당하는 동작점 계산
+  let opPoint: { fpr: number; tpr: number } | null = null;
+  if (threshold != null && scores.length > 0) {
+    const sMin = Math.min(...scores);
+    const sMax = Math.max(...scores);
+    const rawTh = sMax > sMin ? sMin + threshold * (sMax - sMin) : sMin;
+    const nPos = labels.filter(l => l === 1).length;
+    const nNeg = labels.length - nPos;
+    if (nPos > 0 && nNeg > 0) {
+      const tp = labels.filter((l, i) => l === 1 && scores[i] >= rawTh).length;
+      const fp = labels.filter((l, i) => l === 0 && scores[i] >= rawTh).length;
+      opPoint = { fpr: +(fp / nNeg).toFixed(4), tpr: +(tp / nPos).toFixed(4) };
+    }
+  }
 
   return (
     <div>
@@ -60,6 +81,17 @@ export default function RocCurveChart({ metrics }: { metrics: ExperimentMetrics 
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line data={sampled} type="monotone" dataKey="tpr" stroke="#2563eb" dot={false} name="ROC" />
           <Line data={randomLine} type="linear" dataKey="tpr" stroke="#9ca3af" strokeDasharray="4 4" dot={false} name="Random" />
+          {opPoint && (
+            <ReferenceDot
+              x={opPoint.fpr}
+              y={opPoint.tpr}
+              r={5}
+              fill="#ef4444"
+              stroke="#fff"
+              strokeWidth={1.5}
+              label={{ value: `(${opPoint.fpr.toFixed(2)}, ${opPoint.tpr.toFixed(2)})`, fontSize: 9, fill: '#ef4444', position: 'top' }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
