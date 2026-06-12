@@ -37,6 +37,8 @@ export interface DeviceInfo {
   device: 'cuda' | 'cpu';
   gpu_name?: string;
   vram_gb?: number;
+  openvino_available?: boolean;
+  trt_available?: boolean;
 }
 
 export interface ConfigResponse {

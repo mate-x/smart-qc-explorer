@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getExperiments, deleteExperiment, saveExperiment } from '../api/experimentsApi';
+import { getExperiments, deleteExperiment } from '../api/experimentsApi';
+import { startExport, getExportJobStatus } from '../api/exportApi';
+import type { ExportJobStatus } from '../api/exportApi';
 import { useExperimentsStore } from '../store/experimentsStore';
+import { useConfigStore } from '../store/configStore';
 import type { Experiment } from '../types/experiments';
 import { paramSummary, fmt } from '../components/tab4/experimentUtils';
 import ConfusionMatrixChart from '../components/tab4/ConfusionMatrixChart';
@@ -14,12 +17,15 @@ export default function Tab4Experiments() {
   const navigate = useNavigate();
   const { selectedExperimentId, setSelectedExperimentId } = useExperimentsStore();
 
+  const { deviceInfo } = useConfigStore();
+
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [savePath, setSavePath] = useState('');
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  type ExportEntry = ExportJobStatus & { jobId: string };
+  const [exportMap, setExportMap] = useState<Map<string, ExportEntry>>(new Map());
+  const [exportFormat, setExportFormat] = useState<'onnx' | 'openvino' | 'trt'>('onnx');
 
   const selected = experiments.find(e => e.experiment_id === selectedExperimentId) ?? null;
   const completed = experiments.filter(e => e.status === 'completed');
@@ -84,27 +90,31 @@ export default function Tab4Experiments() {
     } catch { /* silent */ }
   }
 
-  async function handleSave() {
-    if (!selected || !savePath.trim()) return;
-    setSaveLoading(true);
-    setSaveResult(null);
+  async function handleExport() {
+    if (!selected) return;
+    const expId = selected.experiment_id;
+    const existing = exportMap.get(expId);
+    if (existing?.status === 'pending' || existing?.status === 'running') return;
+
     try {
-      const res = await saveExperiment(selected.experiment_id, savePath.trim());
-      const { saved_path, size_mb, warning } = res.data;
-      setSaveResult({ ok: true, msg: `저장 완료 — ${saved_path} (${size_mb} MB)${warning ? `\n⚠️ ${warning}` : ''}` });
+      const res = await startExport(expId, exportFormat);
+      const jobId = res.data.job_id;
+      setExportMap(prev => new Map(prev).set(expId, { jobId, status: 'pending', error: null, result: null }));
+
+      let done = false;
+      while (!done) {
+        await new Promise(r => setTimeout(r, 1500));
+        const statusRes = await getExportJobStatus(jobId);
+        const { status, error, result } = statusRes.data;
+        setExportMap(prev => new Map(prev).set(expId, { jobId, status, error: error ?? null, result }));
+        if (status === 'completed' || status === 'failed') done = true;
+      }
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setSaveResult({ ok: false, msg: typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '저장 실패' });
-    } finally {
-      setSaveLoading(false);
+      const msg = typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '내보내기 실패';
+      setExportMap(prev => new Map(prev).set(expId, { jobId: '', status: 'failed', error: msg, result: null }));
     }
   }
-
-  useEffect(() => {
-    if (selected?.model_path) setSavePath(selected.model_path);
-    else if (selected) setSavePath(`./models/${selected.experiment_id}/`);
-    setSaveResult(null);
-  }, [selected?.experiment_id]);
 
   if (loading) {
     return (
@@ -229,33 +239,54 @@ export default function Tab4Experiments() {
         </div>
       )}
 
-      {/* 모델 저장 */}
-      {selected?.status === 'completed' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-slate-800">모델 저장</h3>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={savePath}
-              onChange={e => setSavePath(e.target.value)}
-              placeholder="저장 경로 (예: ./models/my_model/)"
-              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
-            />
-            <button
-              onClick={handleSave}
-              disabled={saveLoading || !savePath.trim()}
-              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 whitespace-nowrap transition-colors cursor-pointer"
-            >
-              {saveLoading ? '저장 중...' : '모델 저장'}
-            </button>
+      {/* 모델 내보내기 — EfficientAD completed 선택 시만 표시 */}
+      {selected?.model_type === 'efficientad' && selected?.status === 'completed' && (() => {
+        const entry = exportMap.get(selected.experiment_id);
+        const isRunning = entry?.status === 'pending' || entry?.status === 'running';
+        return (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-slate-800">모델 내보내기</h3>
+            <div className="flex gap-4">
+              {([
+                { value: 'onnx',     label: 'ONNX',       show: true },
+                { value: 'openvino', label: 'OpenVINO',   show: !!deviceInfo?.openvino_available },
+                { value: 'trt',      label: 'TensorRT',   show: !!deviceInfo?.trt_available },
+              ] as const).filter(f => f.show).map(f => (
+                <label key={f.value} className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="export-format"
+                    value={f.value}
+                    checked={exportFormat === f.value}
+                    onChange={() => setExportFormat(f.value)}
+                    className="accent-sky-600"
+                  />
+                  <span className="text-sm text-slate-700">{f.label}</span>
+                </label>
+              ))}
+            </div>
+            <div>
+              <button
+                onClick={handleExport}
+                disabled={isRunning}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                {isRunning ? '내보내는 중...' : '내보내기'}
+              </button>
+            </div>
+            {entry?.status === 'completed' && entry.result && (
+              <p className="text-xs px-3 py-2 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700">
+                완료 — {entry.result.saved_path}
+              </p>
+            )}
+            {entry?.status === 'failed' && (
+              <p className="text-xs px-3 py-2 rounded-lg border bg-red-50 border-red-200 text-red-600">
+                {entry.error ?? '내보내기 실패'}
+              </p>
+            )}
           </div>
-          {saveResult && (
-            <p className={`text-xs whitespace-pre-wrap px-3 py-2 rounded-lg border ${saveResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
-              {saveResult.msg}
-            </p>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* 다중 실험 비교 */}
       {completed.length >= 2 && (
