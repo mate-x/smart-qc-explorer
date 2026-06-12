@@ -46,15 +46,29 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 통계 바 */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-        <span>전체 {images.length}개</span>
-        <span className="text-green-700 font-medium">TP {tp}</span>
-        <span className="text-red-700 font-medium">FP {fp}</span>
-        <span className="text-blue-700 font-medium">TN {tn}</span>
-        <span className="text-orange-700 font-medium">FN {fn}</span>
-        <span>Max: {score_max.toFixed(4)}</span>
-        <span>Avg: {score_avg.toFixed(4)}</span>
+      {/* 통계 배지 */}
+      <div className="flex flex-wrap gap-2">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-slate-50 border-slate-200 text-slate-600">
+          전체 <span className="font-bold text-slate-800">{images.length}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-green-50 border-green-200 text-green-700">
+          TP <span className="font-bold">{tp}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-red-50 border-red-200 text-red-700">
+          FP <span className="font-bold">{fp}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-blue-50 border-blue-200 text-blue-700">
+          TN <span className="font-bold">{tn}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-orange-50 border-orange-200 text-orange-700">
+          FN <span className="font-bold">{fn}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-slate-50 border-slate-200 text-slate-500">
+          Max <span className="font-bold text-slate-700">{score_max.toFixed(4)}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-slate-50 border-slate-200 text-slate-500">
+          Avg <span className="font-bold text-slate-700">{score_avg.toFixed(4)}</span>
+        </span>
       </div>
 
       {images.length === 0 ? (

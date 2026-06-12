@@ -146,10 +146,10 @@ export default function Tab5AnomalyMap() {
         </div>
       )}
 
-      {/* 결함 유형 필터 + 이미지 그리드 */}
+      {/* 결함 유형 필터 + 이미지 그리드 (단일 카드) */}
       {buildStatus?.built && (
         <>
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
             {defectClasses.length > 0 && (
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium text-gray-600 whitespace-nowrap">결함 유형</label>
@@ -165,13 +165,19 @@ export default function Tab5AnomalyMap() {
                 </select>
               </div>
             )}
-          </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             {imagesLoading ? (
               <p className="text-sm text-slate-400 animate-pulse">이미지 로딩 중...</p>
             ) : imagesError ? (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{imagesError}</p>
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 w-full">{imagesError}</p>
+                <button
+                  onClick={() => navigate('/experiments')}
+                  className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                >
+                  ← 실험 히스토리에서 재생성하기
+                </button>
+              </div>
             ) : imagesData ? (
               <ImageGrid
                 imagesData={imagesData}
