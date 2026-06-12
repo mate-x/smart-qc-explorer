@@ -10,7 +10,6 @@ interface Props {
 }
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow';
-const selectCls = inputCls + ' cursor-pointer';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -102,17 +101,6 @@ export default function PreprocessingForm({ value, onChange, datasetPath }: Prop
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-        <Field label="배경 분리">
-          <select
-            value={value.background_method}
-            onChange={(e) => set('background_method', e.target.value as 'none' | 'sam2')}
-            className={selectCls}
-          >
-            <option value="none">none</option>
-            <option value="sam2">SAM2</option>
-          </select>
-        </Field>
-
         {/* homomorphic 파라미터 */}
         {value.method === 'homomorphic' && (
           <>
@@ -174,6 +162,24 @@ export default function PreprocessingForm({ value, onChange, datasetPath }: Prop
             <p className="text-xs text-red-500 mt-1">32의 배수만 입력 가능합니다.</p>
           )}
         </Field>
+      </div>
+
+      {/* 배경 분리 */}
+      <div>
+        <label className="block text-xs font-medium text-slate-500 mb-1.5">배경 분리</label>
+        <div className="flex gap-2">
+          {(['none', 'sam2'] as const).map((m) => (
+            <button key={m} type="button"
+              onClick={() => set('background_method', m)}
+              className={`px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors cursor-pointer ${
+                value.background_method === m
+                  ? 'bg-sky-600 text-white border-sky-600'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}>
+              {m === 'sam2' ? 'SAM2' : 'none'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 미리보기 섹션 */}
