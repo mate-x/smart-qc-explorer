@@ -56,7 +56,15 @@ export const useTrainingStore = create<TrainingState>((set) => ({
   ...initialState,
 
   setFromSnapshot: (snapshot) =>
-    set({ ...snapshot, batch_done: 0, last_result: null, ws_error: null }),
+    set((prev) => ({
+      ...snapshot,
+      // HTTP snapshot이 늦게 resolve되어 WS가 설정한 running 상태를 idle로 덮어쓰는 race condition 방지
+      status: prev.status === 'running' && snapshot.status === 'idle' ? 'running' : snapshot.status,
+      // WS 재연결 시 진행 중이던 배치 카운트 초기화 방지
+      batch_done: prev.batch_done,
+      last_result: null,
+      ws_error: null,
+    })),
 
   updateProgress: (step, total, loss, elapsed) =>
     set((state) => {
