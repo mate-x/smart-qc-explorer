@@ -7,7 +7,6 @@ import { DEFAULT_PATCHCORE } from './PatchCoreParams';
 
 const IMAGENET_MEAN: [number, number, number] = [0.485, 0.456, 0.406];
 const IMAGENET_STD: [number, number, number] = [0.229, 0.224, 0.225];
-const PAGE_SIZE = 10;
 
 // ── 유틸 ──
 
@@ -109,6 +108,28 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// ── 요약 뷰 헬퍼 ──
+
+function SummaryRow({ label, values }: { label: string; values: string[] }) {
+  if (values.length < 2) return null;
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-xs text-slate-500 w-32 flex-shrink-0">{label}</span>
+      <div className="flex flex-wrap gap-1">
+        {values.map((v) => (
+          <span key={v} className="bg-sky-50 border border-sky-200 text-sky-700 text-xs px-2 py-0.5 rounded-full">
+            {v}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ns(values: number[], fmt?: (v: number) => string): string[] {
+  return values.map((v) => (fmt ? fmt(v) : String(v)));
+}
+
 // ── 조합 행 타입 ──
 
 interface ComboRow {
@@ -167,22 +188,12 @@ export default function BatchExperimentForm({ preConfig }: Props) {
   const [pcKnns, setPcKnns] = useState<number[]>([9]);
   const [pcTopKs, setPcTopKs] = useState<number[]>([0.1]);
 
-  // 페이지네이션 & 선택
-  const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-
-  function handleModelTypeChange(mt: 'efficientad' | 'patchcore') {
-    setModelType(mt);
-    setSelected(new Set());
-    setPage(0);
-  }
-
   // 조합 계산
   const combos = useMemo<ComboRow[]>(() => {
-    // 폴백
-    const methods = preMethods.length  > 0 ? preMethods  : ['없음'];
-    const bgs     = bgMethods.length   > 0 ? bgMethods   : ['none'];
-    const norms   = normMethods.length > 0 ? normMethods : ['ImageNet'];
+    // 3그룹 폴백 제거: 하나라도 비면 preCombos = [] → combos = []
+    const methods = preMethods;
+    const bgs     = bgMethods;
+    const norms   = normMethods;
     const sizes   = imageSizes;
     const batches = batchSizes;
     const seeds   = randomSeeds;
@@ -341,33 +352,91 @@ export default function BatchExperimentForm({ preConfig }: Props) {
     pcBackbones, pcKernels, pcCoresets, pcMaxTrains, pcKnns, pcTopKs, preConfig,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(combos.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageItems = combos.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
-  const selectedCount = selected.size;
+  // 계산식: count >= 2 차원만 포함
+  const formula = useMemo(() => {
+    if (preMethods.length === 0 || bgMethods.length === 0 || normMethods.length === 0) return [];
+    const dims: Array<{ label: string; count: number }> = [];
 
-  function handleRowToggle(globalIdx: number) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(globalIdx)) next.delete(globalIdx);
-      else next.add(globalIdx);
-      return next;
-    });
-  }
+    // 공통
+    if (preMethods.length >= 2)      dims.push({ label: '전처리',        count: preMethods.length });
+    if (bgMethods.length >= 2)       dims.push({ label: '배경분리',      count: bgMethods.length });
+    if (normMethods.length >= 2)     dims.push({ label: '정규화',        count: normMethods.length });
+    if (imageSizes.length >= 2)      dims.push({ label: '이미지크기',    count: imageSizes.length });
+    if (batchSizes.length >= 2)      dims.push({ label: '배치크기',      count: batchSizes.length });
+    if (randomSeeds.length >= 2)     dims.push({ label: '랜덤시드',      count: randomSeeds.length });
+    const effTM = thresholdMethods.length > 0 ? thresholdMethods : ['percentile'];
+    if (effTM.length >= 2)           dims.push({ label: 'Threshold방식', count: effTM.length });
+    if (thresholdValues.length >= 2) dims.push({ label: 'Threshold값',   count: thresholdValues.length });
+
+    if (modelType === 'efficientad') {
+      const mSizes = effModelSizes.length    > 0 ? effModelSizes    : ['medium'];
+      const opts   = effOptimizers.length    > 0 ? effOptimizers    : ['adam'];
+      const scheds = effSchedulers.length    > 0 ? effSchedulers    : ['StepLR'];
+      const ocs    = effOutChannels.length   > 0 ? effOutChannels   : ['384'];
+      const pads   = effPaddings.length      > 0 ? effPaddings      : ['False'];
+      const pens   = effPenalties.length     > 0 ? effPenalties     : ['False'];
+      const ess    = effEarlyStoppings.length > 0 ? effEarlyStoppings : ['False'];
+
+      if (mSizes.length >= 2)            dims.push({ label: '모델크기',         count: mSizes.length });
+      if (opts.length >= 2)              dims.push({ label: 'Optimizer',        count: opts.length });
+      if (scheds.length >= 2)            dims.push({ label: '스케줄러',         count: scheds.length });
+      if (ocs.length >= 2)               dims.push({ label: '출력채널',         count: ocs.length });
+      if (effTrainSteps.length >= 2)     dims.push({ label: 'Train Steps',      count: effTrainSteps.length });
+      if (effLRs.length >= 2)            dims.push({ label: 'LR',               count: effLRs.length });
+      if (pads.length >= 2)              dims.push({ label: '패딩',             count: pads.length });
+      if (pens.length >= 2)              dims.push({ label: 'ImageNet Penalty', count: pens.length });
+      if (effWeightDecays.length >= 2)   dims.push({ label: 'weight_decay',     count: effWeightDecays.length });
+      if (effAeLossWeights.length >= 2)  dims.push({ label: 'ae_loss_weight',   count: effAeLossWeights.length });
+      if (effAeLrs.length >= 2)          dims.push({ label: 'autoencoder_lr',   count: effAeLrs.length });
+      if (effAeWeightDecays.length >= 2) dims.push({ label: 'ae_weight_decay',  count: effAeWeightDecays.length });
+      if (effLrDecayEpochs.length >= 2)  dims.push({ label: 'lr_decay_steps',   count: effLrDecayEpochs.length });
+      if (effLrDecayFactors.length >= 2) dims.push({ label: 'lr_decay_factor',  count: effLrDecayFactors.length });
+      if (effPenaltyBatches.length >= 2) dims.push({ label: 'penalty_batch',    count: effPenaltyBatches.length });
+      if (ess.length >= 2)               dims.push({ label: 'early_stopping',   count: ess.length });
+      if (effPatiences.length >= 2)      dims.push({ label: 'patience',         count: effPatiences.length });
+      if (effMinDeltas.length >= 2)      dims.push({ label: 'min_delta',        count: effMinDeltas.length });
+    } else {
+      const bbs = pcBackbones.length > 0 ? pcBackbones : ['wide_resnet50_2'];
+      const ks  = pcKernels.length   > 0 ? pcKernels   : ['3'];
+
+      if (bbs.length >= 2)           dims.push({ label: '백본',          count: bbs.length });
+      if (ks.length >= 2)            dims.push({ label: '이웃커널크기',  count: ks.length });
+      if (pcCoresets.length >= 2)    dims.push({ label: 'coreset_ratio', count: pcCoresets.length });
+      if (pcMaxTrains.length >= 2)   dims.push({ label: 'max_train',     count: pcMaxTrains.length });
+      if (pcKnns.length >= 2)        dims.push({ label: 'knn',           count: pcKnns.length });
+      if (pcTopKs.length >= 2)       dims.push({ label: 'top_k_ratio',   count: pcTopKs.length });
+    }
+
+    return dims;
+  }, [
+    modelType, preMethods, bgMethods, normMethods, imageSizes, batchSizes,
+    randomSeeds, thresholdMethods, thresholdValues,
+    effModelSizes, effOptimizers, effSchedulers, effOutChannels, effTrainSteps,
+    effLRs, effPaddings, effPenalties, effWeightDecays, effAeLossWeights,
+    effAeLrs, effAeWeightDecays, effLrDecayEpochs, effLrDecayFactors,
+    effPenaltyBatches, effEarlyStoppings, effPatiences, effMinDeltas,
+    pcBackbones, pcKernels, pcCoresets, pcMaxTrains, pcKnns, pcTopKs,
+  ]);
 
   function handleAdd() {
-    if (selectedCount === 0 || combos.length === 0) return;
+    if (combos.length === 0) return;
     const setId = `SET_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
-    selected.forEach((idx) => {
-      const row = combos[idx];
-      if (row) addLocalItem(row.preprocessing_config, row.model_config, setId);
+    combos.forEach((row) => {
+      addLocalItem(row.preprocessing_config, row.model_config, setId);
     });
-    setSelected(new Set());
   }
 
   function sortedAdd(prev: number[], v: number) {
     return prev.includes(v) ? prev : [...prev, v].sort((a, b) => a - b);
   }
+
+  // 요약 섹션 헤더 표시 여부
+  const hasCommonMulti = ([preMethods, bgMethods, normMethods, imageSizes, batchSizes, randomSeeds, thresholdMethods, thresholdValues] as unknown as unknown[][]).some(a => a.length >= 2);
+  const hasModelMulti = modelType === 'efficientad'
+    ? ([effModelSizes, effOptimizers, effSchedulers, effOutChannels, effTrainSteps, effLRs,
+        effPaddings, effPenalties, effWeightDecays, effAeLossWeights, effAeLrs, effAeWeightDecays,
+        effLrDecayEpochs, effLrDecayFactors, effPenaltyBatches, effEarlyStoppings, effPatiences, effMinDeltas] as unknown as unknown[][]).some(a => a.length >= 2)
+    : ([pcBackbones, pcKernels, pcCoresets, pcMaxTrains, pcKnns, pcTopKs] as unknown as unknown[][]).some(a => a.length >= 2);
 
   return (
     <div className="flex flex-col gap-5">
@@ -380,7 +449,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
               name="batch-model-type"
               value={mt}
               checked={modelType === mt}
-              onChange={() => handleModelTypeChange(mt)}
+              onChange={() => setModelType(mt)}
               className="cursor-pointer accent-sky-600"
             />
             <span className="text-sm font-medium text-slate-700">
@@ -679,15 +748,10 @@ export default function BatchExperimentForm({ preConfig }: Props) {
         </div>
       </div>
 
-      {/* 조합 미리보기 테이블 */}
+      {/* 조합 미리보기 */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <span className="text-xs font-semibold text-slate-600">
-            조합 미리보기
-            <span className="ml-2 font-normal text-slate-400">
-              {selectedCount}개 / {combos.length}개 선택됨
-            </span>
-          </span>
+          <span className="text-xs font-semibold text-slate-600">조합 미리보기</span>
           {combos.length > 100 && (
             <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
               100개 초과 ({combos.length}개) — 신중히 선택하세요
@@ -697,108 +761,77 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
         {combos.length > 0 ? (
           <>
-            <div className="rounded-xl border border-slate-200 overflow-hidden">
-              <div className="overflow-auto max-h-56">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-50">
-                    <tr className="border-b border-slate-200">
-                      <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">포함</th>
-                      <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">배경분리</th>
-                      <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">전처리</th>
-                      <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">크기</th>
-                      {modelType === 'efficientad' ? (
-                        <>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">모델크기</th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">Steps</th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">Optimizer</th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">LR</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">백본</th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">Coreset</th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">커널</th>
-                        </>
-                      )}
-                      <th className="px-3 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">Threshold</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {pageItems.map((row, pageIdx) => {
-                      const globalIdx = safePage * PAGE_SIZE + pageIdx;
-                      const isChecked = selected.has(globalIdx);
-                      const pre = row.preprocessing_config;
-                      const mc = row.model_config;
-                      const effP = modelType === 'efficientad' ? mc.params as EfficientAdParamsState : null;
-                      const pcP = modelType === 'patchcore' ? mc.params as PatchCoreParamsState : null;
-                      return (
-                        <tr key={globalIdx} className={`transition-colors ${isChecked ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
-                          <td className="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleRowToggle(globalIdx)}
-                              className="cursor-pointer accent-sky-600"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-slate-600">{pre.background_method}</td>
-                          <td className="px-3 py-2 text-slate-600">{pre.method}</td>
-                          <td className="px-3 py-2 text-slate-600">{pre.image_size}</td>
-                          {effP && (
-                            <>
-                              <td className="px-3 py-2 text-slate-600">{effP.model_size}</td>
-                              <td className="px-3 py-2 text-slate-600">{effP.train_steps.toLocaleString()}</td>
-                              <td className="px-3 py-2 text-slate-600">{effP.optimizer}</td>
-                              <td className="px-3 py-2 text-slate-600">{effP.learning_rate.toExponential(2)}</td>
-                            </>
-                          )}
-                          {pcP && (
-                            <>
-                              <td className="px-3 py-2 text-slate-600">{pcP.backbone}</td>
-                              <td className="px-3 py-2 text-slate-600">{pcP.coreset_sampling_ratio}</td>
-                              <td className="px-3 py-2 text-slate-600">{pcP.neighbourhood_kernel_size}</td>
-                            </>
-                          )}
-                          <td className="px-3 py-2 text-slate-600">{mc.threshold_method} {mc.threshold_value}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {formula.length > 0 && (
+              <div className="rounded-xl border border-slate-200 p-4 flex flex-col gap-2">
+                {hasCommonMulti && (
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide pb-1">공통</p>
+                )}
+                <SummaryRow label="전처리" values={preMethods} />
+                <SummaryRow label="배경분리" values={bgMethods} />
+                <SummaryRow label="정규화" values={normMethods} />
+                <SummaryRow label="이미지크기" values={ns(imageSizes)} />
+                <SummaryRow label="배치크기" values={ns(batchSizes)} />
+                <SummaryRow label="랜덤시드" values={ns(randomSeeds)} />
+                <SummaryRow label="Threshold방식" values={thresholdMethods} />
+                <SummaryRow label="Threshold값" values={ns(thresholdValues)} />
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3">
-                <button type="button"
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={safePage === 0}
-                  className="px-2.5 py-1 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >←</button>
-                <span className="text-xs text-slate-500">{safePage + 1} / {totalPages} 페이지</span>
-                <button type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={safePage >= totalPages - 1}
-                  className="px-2.5 py-1 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >→</button>
+                {hasModelMulti && (
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide pb-1 pt-2">
+                    {modelType === 'efficientad' ? 'EfficientAD' : 'PatchCore'}
+                  </p>
+                )}
+                {modelType === 'efficientad' ? (
+                  <>
+                    <SummaryRow label="모델크기" values={effModelSizes} />
+                    <SummaryRow label="Optimizer" values={effOptimizers} />
+                    <SummaryRow label="스케줄러" values={effSchedulers} />
+                    <SummaryRow label="출력채널" values={effOutChannels} />
+                    <SummaryRow label="Train Steps" values={ns(effTrainSteps, v => v.toLocaleString())} />
+                    <SummaryRow label="LR" values={ns(effLRs, v => v.toExponential(2))} />
+                    <SummaryRow label="패딩" values={effPaddings} />
+                    <SummaryRow label="ImageNet Penalty" values={effPenalties} />
+                    <SummaryRow label="weight_decay" values={ns(effWeightDecays, v => v.toExponential(2))} />
+                    <SummaryRow label="ae_loss_weight" values={ns(effAeLossWeights)} />
+                    <SummaryRow label="autoencoder_lr" values={ns(effAeLrs, v => v.toExponential(2))} />
+                    <SummaryRow label="ae_weight_decay" values={ns(effAeWeightDecays, v => v.toExponential(2))} />
+                    <SummaryRow label="lr_decay_steps" values={ns(effLrDecayEpochs, v => v.toLocaleString())} />
+                    <SummaryRow label="lr_decay_factor" values={ns(effLrDecayFactors)} />
+                    <SummaryRow label="penalty_batch" values={ns(effPenaltyBatches)} />
+                    <SummaryRow label="Early Stopping" values={effEarlyStoppings} />
+                    <SummaryRow label="patience" values={ns(effPatiences, v => v.toLocaleString())} />
+                    <SummaryRow label="min_delta" values={ns(effMinDeltas)} />
+                  </>
+                ) : (
+                  <>
+                    <SummaryRow label="백본" values={pcBackbones} />
+                    <SummaryRow label="이웃커널크기" values={pcKernels} />
+                    <SummaryRow label="coreset_ratio" values={ns(pcCoresets)} />
+                    <SummaryRow label="max_train" values={ns(pcMaxTrains, v => v.toLocaleString())} />
+                    <SummaryRow label="knn" values={ns(pcKnns)} />
+                    <SummaryRow label="top_k_ratio" values={ns(pcTopKs)} />
+                  </>
+                )}
               </div>
             )}
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">
+                {formula.length > 0
+                  ? formula.map(d => `${d.label}(${d.count})`).join(' × ') + ` = ${combos.length}`
+                  : '1개 조합'}
+              </span>
+              <button
+                type="button"
+                onClick={handleAdd}
+                className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+              >
+                {combos.length}개 조합 대기열에 추가
+              </button>
+            </div>
           </>
         ) : (
           <p className="text-xs text-slate-400">파라미터를 선택하면 조합이 표시됩니다.</p>
         )}
-      </div>
-
-      {/* 추가 버튼 */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={selectedCount === 0 || combos.length === 0}
-          className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
-        >
-          선택된 {selectedCount}개 조합 대기열에 추가
-        </button>
       </div>
     </div>
   );
