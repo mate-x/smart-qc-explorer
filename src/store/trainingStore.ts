@@ -26,6 +26,7 @@ interface TrainingState extends TrainingStatusResponse {
   clearLastResult: () => void;
   setWsError: (msg: string | null) => void;
   setCurrentModelType: (model_type: string | null) => void;
+  clearRunData: () => void;
   reset: () => void;
 }
 
@@ -125,6 +126,15 @@ export const useTrainingStore = create<TrainingState>((set) => ({
   setWsError: (msg) => set({ ws_error: msg }),
 
   setCurrentModelType: (model_type) => set({ model_type }),
+
+  clearRunData: () =>
+    set({
+      log_lines: [],
+      loss_history: [],
+      progress: null,
+      current_stage_idx: null,
+      current_stage_name: null,
+    }),
 
   reset: () => set(initialState),
 }));

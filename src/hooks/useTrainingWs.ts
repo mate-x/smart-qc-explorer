@@ -91,6 +91,7 @@ function dispatch(msg: WsMessage) {
       break;
 
     case 'batch_item_started':
+      s.clearRunData();
       s.setStatus('running');
       s.setCurrentModelType(msg.model_type ?? null);
       s.bumpQueueSignal();
