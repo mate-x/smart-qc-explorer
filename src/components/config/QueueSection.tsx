@@ -24,10 +24,10 @@ export default function QueueSection() {
 
   const [page, setPage] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [expName, setExpName] = useState('');
 
   const groupHeaderRowRef = useRef<HTMLTableRowElement>(null);
   const [groupHeaderHeight, setGroupHeaderHeight] = useState(36);
@@ -50,14 +50,18 @@ export default function QueueSection() {
 
     setConfigs(localItems[0].preprocessing_config, localItems[0].model_config);
 
+    const sharedSetId = 'SET_' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+
     const snapshot = [...localItems];
     let successCount = 0;
     let errorMsg = '';
     let failed = false;
 
     for (const item of snapshot) {
+      const effectiveSetId = item.set_id ?? sharedSetId;
+      const effectiveName = expName.trim() || item.name || undefined;
       try {
-        await addToQueue(item.preprocessing_config, item.model_config, item.set_id);
+        await addToQueue(item.preprocessing_config, item.model_config, effectiveSetId, effectiveName);
         successCount++;
       } catch (e: unknown) {
         const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -71,6 +75,7 @@ export default function QueueSection() {
       clearLocalItems();
       clearLastResult();
       setSelectedIndex(null);
+      setExpName('');
     } else {
       for (let i = 0; i < successCount; i++) {
         deleteLocalItem(0);
@@ -93,19 +98,39 @@ export default function QueueSection() {
   return (
     <div className="flex flex-col gap-4">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
         <h3 className="text-sm font-semibold text-slate-800">
           학습 대기열
           <span className="ml-2 text-xs font-normal text-slate-400">({localItems.length}개)</span>
         </h3>
+        <div className="flex-1" />
         <button
           type="button"
-          onClick={handleConfirmClick}
-          disabled={localItems.length === 0 || confirmLoading}
-          className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
-        >
-          {confirmLoading ? '확정 중...' : '확정'}
-        </button>
+          onClick={() => {
+            if (selectedIndex === null) return;
+            const newIdx = selectedIndex - 1;
+            reorderLocalItem(selectedIndex, 'up');
+            setSelectedIndex(newIdx);
+            if (newIdx < page * PAGE_SIZE) setPage(page - 1);
+          }}
+          disabled={selectedIndex === null || selectedIndex === 0}
+          className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >▲ 위로</button>
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedIndex === null) return;
+            const newIdx = selectedIndex + 1;
+            reorderLocalItem(selectedIndex, 'down');
+            setSelectedIndex(newIdx);
+            if (newIdx >= (page + 1) * PAGE_SIZE) setPage(page + 1);
+          }}
+          disabled={selectedIndex === null || selectedIndex === localItems.length - 1}
+          className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >▼ 아래로</button>
+        {selectedIndex !== null && (
+          <span className="text-xs text-slate-400">{selectedIndex + 1}번 항목 선택됨</span>
+        )}
       </div>
 
       {confirmError && (
@@ -145,6 +170,7 @@ export default function QueueSection() {
                     >
                       {patchcoreOpen ? '▾' : '▸'} [PatchCore]
                     </th>
+                    <th rowSpan={2} className={`sticky right-12 z-30 w-[3rem] ${thCls}`}>상세</th>
                     <th rowSpan={2} className={`sticky right-0 z-30 w-[3rem] ${thCls}`}>삭제</th>
                   </tr>
 
@@ -213,8 +239,7 @@ export default function QueueSection() {
                     return (
                       <tr
                         key={globalIdx}
-                        onClick={() => setSelectedIndex((prev) => (prev === globalIdx ? null : globalIdx))}
-                        className={`group cursor-pointer transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                        className={`group transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
                       >
                         {/* 고정 열 */}
                         <td className={`sticky left-0 z-[1] w-[2.5rem] px-2 py-2 text-slate-400 ${stickyBg}`}>
@@ -300,40 +325,36 @@ export default function QueueSection() {
                           <td />
                         )}
 
-                        {/* 고정 삭제 열 */}
+                        {/* 상세 버튼 열 */}
+                        <td
+                          className={`sticky right-12 z-[1] px-2 py-2 ${stickyBg}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedIndex((prev) => (prev === globalIdx ? null : globalIdx))}
+                            className={`text-xs transition-colors cursor-pointer ${isSelected ? 'text-sky-600 font-medium' : 'text-slate-400 hover:text-sky-500'}`}
+                          >상세</button>
+                        </td>
+
+                        {/* 삭제 열 (확인 없이 즉시 삭제) */}
                         <td
                           className={`sticky right-0 z-[1] px-2 py-2 ${stickyBg}`}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {confirmDeleteIndex === globalIdx ? (
-                            <span className="flex gap-1.5 items-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  deleteLocalItem(globalIdx);
-                                  setConfirmDeleteIndex(null);
-                                  if (selectedIndex === globalIdx) setSelectedIndex(null);
-                                  else if (selectedIndex !== null && selectedIndex > globalIdx)
-                                    setSelectedIndex(selectedIndex - 1);
-                                  const newLen = localItems.length - 1;
-                                  const newTotal = Math.ceil(newLen / PAGE_SIZE);
-                                  if (newTotal > 0 && page >= newTotal) setPage(newTotal - 1);
-                                }}
-                                className="text-red-600 hover:underline cursor-pointer text-xs"
-                              >확인</button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteIndex(null)}
-                                className="text-slate-400 hover:underline cursor-pointer text-xs"
-                              >취소</button>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteIndex(globalIdx)}
-                              className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
-                            >삭제</button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteLocalItem(globalIdx);
+                              if (selectedIndex === globalIdx) setSelectedIndex(null);
+                              else if (selectedIndex !== null && selectedIndex > globalIdx)
+                                setSelectedIndex(selectedIndex - 1);
+                              const newLen = localItems.length - 1;
+                              const newTotal = Math.ceil(newLen / PAGE_SIZE);
+                              if (newTotal > 0 && page >= newTotal) setPage(newTotal - 1);
+                            }}
+                            className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors text-xs"
+                          >삭제</button>
                         </td>
                       </tr>
                     );
@@ -364,35 +385,24 @@ export default function QueueSection() {
             </div>
           )}
 
-          {/* 순서 변경 버튼 */}
-          <div className="flex items-center gap-2">
+          {/* 실험명 입력 + 확정 버튼 */}
+          <div className="flex items-center gap-2 justify-end">
+            <input
+              type="text"
+              value={expName}
+              onChange={(e) => setExpName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !confirmLoading && handleConfirmClick()}
+              placeholder="실험명 (비워두면 자동 생성)"
+              className="w-64 border border-slate-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
+            />
             <button
               type="button"
-              onClick={() => {
-                if (selectedIndex === null) return;
-                const newIdx = selectedIndex - 1;
-                reorderLocalItem(selectedIndex, 'up');
-                setSelectedIndex(newIdx);
-                if (newIdx < page * PAGE_SIZE) setPage(page - 1);
-              }}
-              disabled={selectedIndex === null || selectedIndex === 0}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            >▲ 위로</button>
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedIndex === null) return;
-                const newIdx = selectedIndex + 1;
-                reorderLocalItem(selectedIndex, 'down');
-                setSelectedIndex(newIdx);
-                if (newIdx >= (page + 1) * PAGE_SIZE) setPage(page + 1);
-              }}
-              disabled={selectedIndex === null || selectedIndex === localItems.length - 1}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            >▼ 아래로</button>
-            {selectedIndex !== null && (
-              <span className="text-xs text-slate-400">{selectedIndex + 1}번 항목 선택됨</span>
-            )}
+              onClick={handleConfirmClick}
+              disabled={confirmLoading}
+              className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+            >
+              {confirmLoading ? '확정 중...' : '확정'}
+            </button>
           </div>
         </>
       ) : (

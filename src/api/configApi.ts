@@ -33,11 +33,13 @@ export const addToQueue = (
   preprocessing_config: PreprocessingConfig,
   model_config: ModelConfig,
   set_id?: string,
+  name?: string,
 ) =>
   apiClient.post<{ id: string; name: string }>('/api/queue', {
     preprocessing_config,
     model_config,
     ...(set_id ? { set_id } : {}),
+    ...(name ? { name } : {}),
   });
 
 export const deleteQueueItem = (itemId: string) =>

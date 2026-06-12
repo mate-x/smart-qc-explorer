@@ -6,11 +6,12 @@ export interface LocalQueueItem {
   preprocessing_config: PreprocessingConfig;
   model_config: ModelConfig;
   set_id?: string;
+  name?: string;
 }
 
 interface LocalQueueState {
   localItems: LocalQueueItem[];
-  addLocalItem: (pre: PreprocessingConfig, model: ModelConfig, set_id?: string) => void;
+  addLocalItem: (pre: PreprocessingConfig, model: ModelConfig, set_id?: string, name?: string) => void;
   deleteLocalItem: (index: number) => void;
   reorderLocalItem: (index: number, direction: 'up' | 'down') => void;
   clearLocalItems: () => void;
@@ -21,7 +22,7 @@ export const useLocalQueueStore = create<LocalQueueState>()(
     (set) => ({
       localItems: [],
 
-      addLocalItem: (pre, model, set_id) =>
+      addLocalItem: (pre, model, set_id, name) =>
         set((state) => ({
           localItems: [
             ...state.localItems,
@@ -29,6 +30,7 @@ export const useLocalQueueStore = create<LocalQueueState>()(
               preprocessing_config: pre,
               model_config: model,
               ...(set_id !== undefined ? { set_id } : {}),
+              ...(name !== undefined ? { name } : {}),
             },
           ],
         })),
