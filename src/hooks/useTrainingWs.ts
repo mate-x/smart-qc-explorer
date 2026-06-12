@@ -83,11 +83,13 @@ function dispatch(msg: WsMessage) {
 
     case 'stopped':
       s.setStopped();
+      s.bumpQueueSignal();
       break;
 
     case 'error':
       s.setWsError(msg.message);
       s.setStatus('idle');
+      s.bumpQueueSignal();
       break;
 
     case 'batch_item_started':

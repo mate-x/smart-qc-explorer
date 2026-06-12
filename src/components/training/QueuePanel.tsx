@@ -36,7 +36,20 @@ export default function QueuePanel() {
   }, [batch_queue_signal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isRunning = status === 'running' || status === 'paused';
-  const pendingCount = items.filter((item) => item.status === 'pending').length;
+
+  // B안 필터링: set_id가 있는 항목은 동일 set 내 pending/running이 하나라도 있으면 전체 표시,
+  // 없으면 전체 숨김. set_id가 없는 항목은 pending/running인 것만 표시.
+  const activeSetIds = new Set(
+    items
+      .filter((item) => item.status === 'pending' || item.status === 'running')
+      .map((item) => item.set_id)
+      .filter((id): id is string => !!id),
+  );
+  const filteredItems = items.filter((item) =>
+    item.set_id ? activeSetIds.has(item.set_id) : item.status === 'pending' || item.status === 'running',
+  );
+
+  const pendingCount = filteredItems.filter((item) => item.status === 'pending').length;
 
   useEffect(() => {
     if (isRunning) setBatchPending(false);
@@ -50,7 +63,7 @@ export default function QueuePanel() {
     );
   }
 
-  if (items.length === 0) return null;
+  if (filteredItems.length === 0) return null;
 
   async function handleDelete(id: string) {
     setDeleteError(null);
@@ -99,7 +112,7 @@ export default function QueuePanel() {
       <div className="flex items-center gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-slate-800">
           학습 대기열
-          <span className="ml-2 text-xs font-normal text-slate-400">({items.length}개)</span>
+          <span className="ml-2 text-xs font-normal text-slate-400">({filteredItems.length}개)</span>
         </h3>
 
         {batch_mode && isRunning && (
@@ -143,7 +156,7 @@ export default function QueuePanel() {
       {batchError && <p className="text-xs text-red-600">{batchError}</p>}
       {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
 
-      {items.length > 0 ? (
+      {filteredItems.length > 0 ? (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-xs">
             <thead>
@@ -156,7 +169,7 @@ export default function QueuePanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {items.map((item, idx) => (
+              {filteredItems.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
                   <td className="px-3 py-2 font-mono text-slate-700">{item.name}</td>
