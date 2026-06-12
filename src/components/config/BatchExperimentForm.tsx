@@ -149,6 +149,14 @@ export default function BatchExperimentForm({ preConfig }: Props) {
   const [effPenalties, setEffPenalties] = useState<string[]>([]);
   const [effWeightDecays, setEffWeightDecays] = useState<number[]>([0.0001]);
   const [effAeLossWeights, setEffAeLossWeights] = useState<number[]>([0.5]);
+  const [effAeLrs,          setEffAeLrs         ] = useState<number[]>([0.0001]);
+  const [effAeWeightDecays, setEffAeWeightDecays] = useState<number[]>([0.00001]);
+  const [effLrDecayEpochs,  setEffLrDecayEpochs ] = useState<number[]>([50000]);
+  const [effLrDecayFactors, setEffLrDecayFactors] = useState<number[]>([0.1]);
+  const [effPenaltyBatches, setEffPenaltyBatches] = useState<number[]>([8]);
+  const [effEarlyStoppings, setEffEarlyStoppings] = useState<string[]>([]);
+  const [effPatiences,      setEffPatiences     ] = useState<number[]>([5000]);
+  const [effMinDeltas,      setEffMinDeltas     ] = useState<number[]>([0.001]);
 
   // PatchCore 파라미터
   const [pcBackbones, setPcBackbones] = useState<string[]>([]);
@@ -171,16 +179,52 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
   // 조합 계산
   const combos = useMemo<ComboRow[]>(() => {
-    const methods = preMethods;
-    const bgs = bgMethods;
-    const norms = normMethods;
-    const sizes = imageSizes;
+    // 폴백
+    const methods = preMethods.length  > 0 ? preMethods  : ['없음'];
+    const bgs     = bgMethods.length   > 0 ? bgMethods   : ['none'];
+    const norms   = normMethods.length > 0 ? normMethods : ['ImageNet'];
+    const sizes   = imageSizes;
     const batches = batchSizes;
-    const seeds = randomSeeds;
+    const seeds   = randomSeeds;
     const tMethods = thresholdMethods.length > 0 ? thresholdMethods : ['percentile'];
-    const tValues = thresholdValues;
+    const tValues  = thresholdValues;
 
-    const rows: ComboRow[] = [];
+    // EfficientAD 폴백
+    const mSizes = effModelSizes.length   > 0 ? effModelSizes  : ['medium'];
+    const opts   = effOptimizers.length   > 0 ? effOptimizers  : ['adam'];
+    const scheds = effSchedulers.length   > 0 ? effSchedulers  : ['StepLR'];
+    const ocs    = (effOutChannels.length > 0 ? effOutChannels : ['384']).map(Number);
+    const steps  = effTrainSteps;
+    const lrs    = effLRs;
+    const pads   = effPaddings.length     > 0 ? effPaddings    : ['False'];
+    const pens   = effPenalties.length    > 0 ? effPenalties   : ['False'];
+    const wds    = effWeightDecays;
+    const aelws  = effAeLossWeights;
+    const aelrs  = effAeLrs;
+    const aelwds = effAeWeightDecays;
+    const lrdes  = effLrDecayEpochs;
+    const lrdfs  = effLrDecayFactors;
+    const pbs    = effPenaltyBatches;
+    const ess    = effEarlyStoppings.length > 0 ? effEarlyStoppings : ['False'];
+    const pats   = effPatiences;
+    const mds    = effMinDeltas;
+
+    // PatchCore 폴백
+    const bbs  = pcBackbones.length > 0 ? pcBackbones : ['wide_resnet50_2'];
+    const ks   = (pcKernels.length  > 0 ? pcKernels   : ['3']).map(Number);
+    const crs  = pcCoresets;
+    const mts  = pcMaxTrains;
+    const knns = pcKnns;
+    const tks  = pcTopKs;
+
+    // Step 1: 전처리 조합 배열 빌드
+    const preCombos: Array<{
+      pre: PreprocessingConfig;
+      batch: number;
+      seed: number;
+      tm: 'percentile' | 'absolute';
+      tv: number;
+    }> = [];
 
     for (const m of methods) {
       const preMethod = m === '없음' ? 'none' : m === 'Homomorphic' ? 'homomorphic' : m === 'HE' ? 'he' : 'clahe';
@@ -194,95 +238,94 @@ export default function BatchExperimentForm({ preConfig }: Props) {
               for (const seed of seeds) {
                 for (const tm of tMethods) {
                   for (const tv of tValues) {
-                    const pre: PreprocessingConfig = {
-                      method: preMethod as PreprocessingConfig['method'],
-                      background_method: bgMethod as PreprocessingConfig['background_method'],
-                      resize_mode: 'padding',
-                      image_size: sz,
-                      normalization: 'imagenet',
-                      mean,
-                      std,
-                      params: null,
-                    };
-
-                    if (modelType === 'efficientad') {
-                      const mSizes = effModelSizes;
-                      const opts = effOptimizers;
-                      const scheds = effSchedulers;
-                      const ocs = effOutChannels.map(Number);
-                      const steps = effTrainSteps;
-                      const lrs = effLRs;
-                      const pads = effPaddings.length > 0 ? effPaddings : ['미사용'];
-                      const pens = effPenalties.length > 0 ? effPenalties : ['미사용'];
-                      const wds = effWeightDecays;
-                      const aelws = effAeLossWeights;
-
-                      for (const ms of mSizes) for (const opt of opts) for (const sched of scheds)
-                        for (const oc of ocs) for (const st of steps) for (const lr of lrs)
-                          for (const pad of pads) for (const pen of pens) for (const wd of wds)
-                            for (const aelw of aelws) {
-                              const params: EfficientAdParamsState = {
-                                ...DEFAULT_EFFICIENTAD,
-                                model_size: ms as 'small' | 'medium',
-                                optimizer: opt as 'adam' | 'adamw' | 'sgd',
-                                scheduler: sched as 'StepLR' | 'CosineAnnealingLR',
-                                out_channels: oc as 128 | 256 | 384 | 512,
-                                train_steps: st,
-                                learning_rate: lr,
-                                padding: pad === '사용',
-                                use_imagenet_penalty: pen === '사용',
-                                weight_decay: wd,
-                                ae_loss_weight: aelw,
-                              };
-                              rows.push({
-                                preprocessing_config: pre,
-                                model_config: {
-                                  model_type: 'efficientad',
-                                  batch_size: batch,
-                                  random_seed: seed,
-                                  threshold_method: tm as 'percentile' | 'absolute',
-                                  threshold_value: tv,
-                                  params,
-                                },
-                              });
-                            }
-                    } else {
-                      const bbs = pcBackbones;
-                      const ks = pcKernels.map(Number);
-                      const crs = pcCoresets;
-                      const mts = pcMaxTrains;
-                      const knns = pcKnns;
-                      const tks = pcTopKs;
-
-                      for (const bb of bbs) for (const k of ks) for (const cr of crs)
-                        for (const mt of mts) for (const kn of knns) for (const tk of tks) {
-                          const params: PatchCoreParamsState = {
-                            ...DEFAULT_PATCHCORE,
-                            backbone: bb as 'wide_resnet50_2' | 'resnet18' | 'resnet50',
-                            neighbourhood_kernel_size: k as 1 | 3 | 5 | 7 | 9,
-                            coreset_sampling_ratio: cr,
-                            max_train: mt,
-                            knn: kn,
-                            top_k_ratio: tk,
-                          };
-                          rows.push({
-                            preprocessing_config: pre,
-                            model_config: {
-                              model_type: 'patchcore',
-                              batch_size: batch,
-                              random_seed: seed,
-                              threshold_method: tm as 'percentile' | 'absolute',
-                              threshold_value: tv,
-                              params,
-                            },
-                          });
-                        }
-                    }
+                    preCombos.push({
+                      pre: {
+                        method: preMethod as PreprocessingConfig['method'],
+                        background_method: bgMethod as PreprocessingConfig['background_method'],
+                        resize_mode: 'padding',
+                        image_size: sz,
+                        normalization: 'imagenet',
+                        mean,
+                        std,
+                        params: null,
+                      },
+                      batch,
+                      seed,
+                      tm: tm as 'percentile' | 'absolute',
+                      tv,
+                    });
                   }
                 }
               }
             }
           }
+        }
+      }
+    }
+
+    // Step 2: 모델 파라미터 배열 빌드 + preCombos 교차
+    const rows: ComboRow[] = [];
+
+    if (modelType === 'efficientad') {
+      type P = EfficientAdParamsState;
+      let ep: P[] = [{ ...DEFAULT_EFFICIENTAD }];
+      ep = mSizes .flatMap(ms  => ep.map(p => ({ ...p, model_size:              ms  as P['model_size']   })));
+      ep = opts   .flatMap(opt => ep.map(p => ({ ...p, optimizer:               opt as P['optimizer']    })));
+      ep = scheds .flatMap(s   => ep.map(p => ({ ...p, scheduler:               s   as P['scheduler']    })));
+      ep = ocs    .flatMap(oc  => ep.map(p => ({ ...p, out_channels:            oc  as P['out_channels'] })));
+      ep = steps  .flatMap(st  => ep.map(p => ({ ...p, train_steps:             st                       })));
+      ep = lrs    .flatMap(lr  => ep.map(p => ({ ...p, learning_rate:           lr                       })));
+      ep = pads   .flatMap(pad => ep.map(p => ({ ...p, padding:                 pad === 'True'           })));
+      ep = pens   .flatMap(pen => ep.map(p => ({ ...p, use_imagenet_penalty:    pen === 'True'           })));
+      ep = wds    .flatMap(wd  => ep.map(p => ({ ...p, weight_decay:            wd                       })));
+      ep = aelws  .flatMap(w   => ep.map(p => ({ ...p, ae_loss_weight:          w                        })));
+      ep = aelrs  .flatMap(r   => ep.map(p => ({ ...p, autoencoder_lr:          r                        })));
+      ep = aelwds .flatMap(w   => ep.map(p => ({ ...p, autoencoder_weight_decay: w                       })));
+      ep = lrdes  .flatMap(e   => ep.map(p => ({ ...p, lr_decay_epochs:         e                        })));
+      ep = lrdfs  .flatMap(f   => ep.map(p => ({ ...p, lr_decay_factor:         f                        })));
+      ep = pbs    .flatMap(b   => ep.map(p => ({ ...p, penalty_batch_size:      b                        })));
+      ep = ess    .flatMap(es  => ep.map(p => ({ ...p, early_stopping:          es === 'True'            })));
+      ep = pats   .flatMap(pt  => ep.map(p => ({ ...p, patience:                pt                       })));
+      ep = mds    .flatMap(md  => ep.map(p => ({ ...p, min_delta:               md                       })));
+
+      for (const { pre, batch, seed, tm, tv } of preCombos) {
+        for (const effParams of ep) {
+          rows.push({
+            preprocessing_config: pre,
+            model_config: {
+              model_type: 'efficientad',
+              batch_size: batch,
+              random_seed: seed,
+              threshold_method: tm,
+              threshold_value: tv,
+              params: effParams,
+            },
+          });
+        }
+      }
+    } else {
+      type PC = PatchCoreParamsState;
+      let pp: PC[] = [{ ...DEFAULT_PATCHCORE }];
+      pp = bbs .flatMap(bb => pp.map(p => ({ ...p, backbone:                  bb as PC['backbone']                  })));
+      pp = ks  .flatMap(k  => pp.map(p => ({ ...p, neighbourhood_kernel_size: k  as PC['neighbourhood_kernel_size'] })));
+      pp = crs .flatMap(cr => pp.map(p => ({ ...p, coreset_sampling_ratio:    cr                                    })));
+      pp = mts .flatMap(mt => pp.map(p => ({ ...p, max_train:                 mt                                    })));
+      pp = knns.flatMap(kn => pp.map(p => ({ ...p, knn:                       kn                                    })));
+      pp = tks .flatMap(tk => pp.map(p => ({ ...p, top_k_ratio:               tk                                    })));
+
+      for (const { pre, batch, seed, tm, tv } of preCombos) {
+        for (const pcParams of pp) {
+          rows.push({
+            preprocessing_config: pre,
+            model_config: {
+              model_type: 'patchcore',
+              batch_size: batch,
+              random_seed: seed,
+              threshold_method: tm,
+              threshold_value: tv,
+              params: pcParams,
+            },
+          });
         }
       }
     }
@@ -293,6 +336,8 @@ export default function BatchExperimentForm({ preConfig }: Props) {
     randomSeeds, thresholdMethods, thresholdValues,
     effModelSizes, effOptimizers, effSchedulers, effOutChannels, effTrainSteps,
     effLRs, effPaddings, effPenalties, effWeightDecays, effAeLossWeights,
+    effAeLrs, effAeWeightDecays, effLrDecayEpochs, effLrDecayFactors,
+    effPenaltyBatches, effEarlyStoppings, effPatiences, effMinDeltas,
     pcBackbones, pcKernels, pcCoresets, pcMaxTrains, pcKnns, pcTopKs, preConfig,
   ]);
 
@@ -484,11 +529,11 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                 {effAdvOpen && (
                   <div className="mt-3 flex flex-col gap-4 pl-3 border-l-2 border-slate-100">
                     <Field label="패딩 사용">
-                      <CheckGroup options={['사용', '미사용']} selected={effPaddings}
+                      <CheckGroup options={['True', 'False']} selected={effPaddings}
                         onToggle={(opt) => setEffPaddings((prev) => toggle(prev, opt))} />
                     </Field>
                     <Field label="ImageNet Penalty">
-                      <CheckGroup options={['사용', '미사용']} selected={effPenalties}
+                      <CheckGroup options={['True', 'False']} selected={effPenalties}
                         onToggle={(opt) => setEffPenalties((prev) => toggle(prev, opt))} />
                     </Field>
                     <Field label="가중치 감쇠 (weight_decay)">
@@ -506,6 +551,68 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                         onAdd={(v) => setEffAeLossWeights((prev) => sortedAdd(prev, v))}
                         onRemove={(v) => setEffAeLossWeights((prev) => prev.filter((x) => x !== v))}
                         defaultValue={0.5} step={0.05}
+                      />
+                    </Field>
+                    <Field label="AutoEncoder LR (autoencoder_lr)">
+                      <TagInput
+                        values={effAeLrs}
+                        onAdd={(v) => setEffAeLrs((prev) => sortedAdd(prev, v))}
+                        onRemove={(v) => setEffAeLrs((prev) => prev.filter((x) => x !== v))}
+                        defaultValue={0.0001} step={0.00001}
+                        fmt={(v) => v.toExponential(2)}
+                      />
+                    </Field>
+                    <Field label="AE 가중치 감쇠 (autoencoder_weight_decay)">
+                      <TagInput
+                        values={effAeWeightDecays}
+                        onAdd={(v) => setEffAeWeightDecays((prev) => sortedAdd(prev, v))}
+                        onRemove={(v) => setEffAeWeightDecays((prev) => prev.filter((x) => x !== v))}
+                        defaultValue={0.00001} step={0.000001}
+                        fmt={(v) => v.toExponential(2)}
+                      />
+                    </Field>
+                    <Field label="LR Decay Steps (lr_decay_epochs)">
+                      <TagInput
+                        values={effLrDecayEpochs}
+                        onAdd={(v) => setEffLrDecayEpochs((prev) => sortedAdd(prev, v))}
+                        onRemove={(v) => setEffLrDecayEpochs((prev) => prev.filter((x) => x !== v))}
+                        defaultValue={50000} step={1000}
+                      />
+                    </Field>
+                    <Field label="LR Decay Factor (lr_decay_factor)">
+                      <TagInput
+                        values={effLrDecayFactors}
+                        onAdd={(v) => setEffLrDecayFactors((prev) => sortedAdd(prev, v))}
+                        onRemove={(v) => setEffLrDecayFactors((prev) => prev.filter((x) => x !== v))}
+                        defaultValue={0.1} step={0.05}
+                      />
+                    </Field>
+                    <Field label="Penalty Batch Size (penalty_batch_size)">
+                      <TagInput
+                        values={effPenaltyBatches}
+                        onAdd={(v) => setEffPenaltyBatches((prev) => sortedAdd(prev, v))}
+                        onRemove={(v) => setEffPenaltyBatches((prev) => prev.filter((x) => x !== v))}
+                        defaultValue={8} step={1}
+                      />
+                    </Field>
+                    <Field label="Early Stopping">
+                      <CheckGroup options={['True', 'False']} selected={effEarlyStoppings}
+                        onToggle={(opt) => setEffEarlyStoppings((prev) => toggle(prev, opt))} />
+                    </Field>
+                    <Field label="Patience (patience)">
+                      <TagInput
+                        values={effPatiences}
+                        onAdd={(v) => setEffPatiences((prev) => sortedAdd(prev, v))}
+                        onRemove={(v) => setEffPatiences((prev) => prev.filter((x) => x !== v))}
+                        defaultValue={5000} step={500}
+                      />
+                    </Field>
+                    <Field label="Min Delta (min_delta)">
+                      <TagInput
+                        values={effMinDeltas}
+                        onAdd={(v) => setEffMinDeltas((prev) => sortedAdd(prev, v))}
+                        onRemove={(v) => setEffMinDeltas((prev) => prev.filter((x) => x !== v))}
+                        defaultValue={0.001} step={0.001}
                       />
                     </Field>
                   </div>
