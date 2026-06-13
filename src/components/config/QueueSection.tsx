@@ -14,6 +14,7 @@ const thCls = 'px-2 py-2 text-left text-xs font-semibold text-slate-500 whitespa
 const thGroupCls = `${thCls} cursor-pointer select-none hover:bg-slate-100 transition-colors border-l border-slate-200`;
 const tdCls = 'px-2 py-2 text-slate-600 whitespace-nowrap';
 const tdDashCls = 'px-2 py-2 text-slate-300 whitespace-nowrap';
+const fmtLR = (v: number) => String(v);
 
 export default function QueueSection() {
   const { localItems, deleteLocalItem, reorderLocalItem, clearLocalItems } = useLocalQueueStore();
@@ -144,7 +145,7 @@ export default function QueueSection() {
                   <tr ref={groupHeaderRowRef}>
                     <th rowSpan={2} className={`sticky left-0 z-30 w-[2.5rem] ${thCls}`}>#</th>
                     <th rowSpan={2} className={`sticky left-10 z-30 w-[6rem] ${thCls}`}>모델</th>
-                    <th rowSpan={2} className={`sticky left-[136px] z-30 w-[7rem] ${thCls}`}>Set ID</th>
+                    <th rowSpan={2} className={`sticky left-[136px] z-30 w-[7rem] border-r border-slate-200 ${thCls}`}>Set ID</th>
                     <th
                       colSpan={commonOpen ? 7 : 1}
                       className={thGroupCls}
@@ -166,7 +167,7 @@ export default function QueueSection() {
                     >
                       {patchcoreOpen ? '▾' : '▸'} [PatchCore]
                     </th>
-                    <th rowSpan={2} className={`sticky right-12 z-30 w-[3rem] ${thCls}`}></th>
+                    <th rowSpan={2} className={`sticky right-12 z-30 w-[3rem] border-l border-slate-200 ${thCls}`}></th>
                     <th rowSpan={2} className={`sticky right-0 z-30 w-[3rem] ${thCls}`}></th>
                   </tr>
 
@@ -244,7 +245,7 @@ export default function QueueSection() {
                         <td className={`sticky left-10 z-[1] w-[6rem] px-2 py-2 font-mono text-slate-700 ${stickyBg}`}>
                           <span className="truncate block">{mc.model_type}</span>
                         </td>
-                        <td className={`sticky left-[136px] z-[1] w-[7rem] px-2 py-2 text-slate-500 ${stickyBg}`}>
+                        <td className={`sticky left-[136px] z-[1] w-[7rem] px-2 py-2 text-slate-500 border-r border-slate-200 ${stickyBg}`}>
                           <span className="truncate block">{item.set_id ?? '—'}</span>
                         </td>
 
@@ -271,13 +272,13 @@ export default function QueueSection() {
                               <td className={tdCls}>{mc.params.train_steps.toLocaleString()}</td>
                               <td className={tdCls}>{mc.params.optimizer}</td>
                               <td className={tdCls}>{mc.params.scheduler}</td>
-                              <td className={tdCls}>{mc.params.learning_rate.toExponential(2)}</td>
-                              <td className={tdCls}>{mc.params.weight_decay.toExponential(2)}</td>
+                              <td className={tdCls}>{fmtLR(mc.params.learning_rate)}</td>
+                              <td className={tdCls}>{fmtLR(mc.params.weight_decay)}</td>
                               <td className={tdCls}>{mc.params.out_channels}</td>
                               <td className={tdCls}>{String(mc.params.padding)}</td>
                               <td className={tdCls}>{mc.params.ae_loss_weight}</td>
-                              <td className={tdCls}>{mc.params.autoencoder_lr.toExponential(2)}</td>
-                              <td className={tdCls}>{mc.params.autoencoder_weight_decay.toExponential(2)}</td>
+                              <td className={tdCls}>{fmtLR(mc.params.autoencoder_lr)}</td>
+                              <td className={tdCls}>{fmtLR(mc.params.autoencoder_weight_decay)}</td>
                               <td className={tdCls}>{mc.params.lr_decay_epochs.toLocaleString()}</td>
                               <td className={tdCls}>{mc.params.lr_decay_factor}</td>
                               <td className={tdCls}>{String(mc.params.use_imagenet_penalty)}</td>
@@ -323,7 +324,7 @@ export default function QueueSection() {
 
                         {/* 상세 버튼 열 */}
                         <td
-                          className={`sticky right-12 z-[1] px-2 py-2 ${stickyBg}`}
+                          className={`sticky right-12 z-[1] px-2 py-2 border-l border-slate-200 ${stickyBg}`}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
