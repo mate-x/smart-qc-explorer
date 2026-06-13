@@ -113,16 +113,23 @@ export const useTrainingStore = create<TrainingState>((set) => ({
 
   incBatchDone: () => set((s) => ({ batch_done: s.batch_done + 1 })),
 
-  setBatchCompleted: (completed, failed, skipped) =>
+  setBatchCompleted: (completed, failed, skipped) => {
+    const isSingle = completed === 1 && failed === 0 && skipped === 0;
     set({
       status: 'idle',
       batch_mode: false,
+      batch_done: 0,
+      batch_total: 0,
       progress: null,
-      last_result: {
-        level: failed > 0 ? 'warning' : 'success',
-        msg: `일괄 학습 완료. 완료: ${completed}개 | 실패: ${failed}개 | 건너뜀: ${skipped}개`,
-      },
-    }),
+      // Q12: 단일 완료 시 last_result 생략 (setCompleted의 AUC 메시지 유지)
+      ...(!isSingle && {
+        last_result: {
+          level: failed > 0 ? 'warning' : 'success',
+          msg: `일괄 학습 완료. 완료: ${completed}개 | 실패: ${failed}개 | 건너뜀: ${skipped}개`,
+        },
+      }),
+    });
+  },
 
   bumpQueueSignal: () => set((s) => ({ batch_queue_signal: s.batch_queue_signal + 1 })),
 
