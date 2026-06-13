@@ -32,7 +32,7 @@ const DEFAULT_MODEL: ModelConfig = {
 
 export default function Tab2Config() {
   const { setDeviceInfo } = useConfigStore();
-  const { addLocalItem } = useLocalQueueStore();
+  const { addLocalItem, getOrCreateSetId } = useLocalQueueStore();
   const { datasetMeta, datasetPath } = useDatasetStore();
 
   const [preConfig, setPreConfig] = useState<PreprocessingConfig>(DEFAULT_PRE);
@@ -85,7 +85,8 @@ export default function Tab2Config() {
       return;
     }
     setAddError(null);
-    addLocalItem(preConfig, modelConfig);
+    const setId = getOrCreateSetId();
+    addLocalItem(preConfig, modelConfig, setId);
   }
 
   if (loading) {
