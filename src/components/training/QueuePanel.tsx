@@ -29,6 +29,7 @@ const thCls = 'px-2 py-2 text-left text-xs font-semibold text-slate-500 whitespa
 const thGroupCls = `${thCls} cursor-pointer select-none hover:bg-slate-100 transition-colors border-l border-slate-200`;
 const tdCls = 'px-2 py-2 text-slate-600 whitespace-nowrap';
 const tdDashCls = 'px-2 py-2 text-slate-300 whitespace-nowrap';
+const fmtLR = (v: number) => String(v);
 
 export default function QueuePanel() {
   const { status, batch_mode, batch_total, batch_done, batch_queue_signal, setCurrentModelType } = useTrainingStore();
@@ -79,7 +80,7 @@ export default function QueuePanel() {
     if (isRunning) setBatchPending(false);
   }, [isRunning]);
 
-  if (loading) {
+  if (loading && items.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-center min-h-[60px]">
         <span className="text-xs text-slate-400 animate-pulse">큐 로딩 중...</span>
@@ -104,6 +105,7 @@ export default function QueuePanel() {
     try {
       const res = await startBatchTraining();
       setCurrentModelType(res.data.model_type ?? null);
+      await loadQueue();
       setBatchPending(true);
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -187,7 +189,7 @@ export default function QueuePanel() {
               {/* Row 1: 그룹 헤더 */}
               <tr ref={groupHeaderRowRef}>
                 <th rowSpan={2} className={`sticky left-0 z-30 w-[2.5rem] ${thCls}`}>#</th>
-                <th rowSpan={2} className={`sticky left-10 z-30 w-[8rem] ${thCls}`}>실험명</th>
+                <th rowSpan={2} className={`sticky left-10 z-30 w-[8rem] border-r border-slate-200 ${thCls}`}>실험명</th>
                 <th
                   colSpan={commonOpen ? 7 : 1}
                   className={thGroupCls}
@@ -210,7 +212,7 @@ export default function QueuePanel() {
                   {patchcoreOpen ? '▾' : '▸'} [PatchCore]
                 </th>
                 <th rowSpan={2} className={`w-[5rem] ${thCls}`}>Set ID</th>
-                <th rowSpan={2} className={`sticky right-12 z-30 w-[4rem] ${thCls}`}>상태</th>
+                <th rowSpan={2} className={`sticky right-12 z-30 w-[4rem] border-l border-slate-200 ${thCls}`}>상태</th>
                 <th rowSpan={2} className={`sticky right-0 z-30 w-[3rem] ${thCls}`}></th>
               </tr>
 
@@ -279,7 +281,7 @@ export default function QueuePanel() {
                     <td className={`sticky left-0 z-[1] w-[2.5rem] px-2 py-2 text-slate-400 ${stickyBg}`}>
                       {idx + 1}
                     </td>
-                    <td className={`sticky left-10 z-[1] w-[8rem] px-2 py-2 font-mono text-slate-700 ${stickyBg}`}>
+                    <td className={`sticky left-10 z-[1] w-[8rem] px-2 py-2 font-mono text-slate-700 border-r border-slate-200 ${stickyBg}`}>
                       <span className="truncate block">{item.name}</span>
                     </td>
 
@@ -304,13 +306,13 @@ export default function QueuePanel() {
                           <td className={tdCls}>{mc.params.train_steps.toLocaleString()}</td>
                           <td className={tdCls}>{mc.params.optimizer}</td>
                           <td className={tdCls}>{mc.params.scheduler}</td>
-                          <td className={tdCls}>{mc.params.learning_rate.toExponential(2)}</td>
-                          <td className={tdCls}>{mc.params.weight_decay.toExponential(2)}</td>
+                          <td className={tdCls}>{fmtLR(mc.params.learning_rate)}</td>
+                          <td className={tdCls}>{fmtLR(mc.params.weight_decay)}</td>
                           <td className={tdCls}>{mc.params.out_channels}</td>
                           <td className={tdCls}>{String(mc.params.padding)}</td>
                           <td className={tdCls}>{mc.params.ae_loss_weight}</td>
-                          <td className={tdCls}>{mc.params.autoencoder_lr.toExponential(2)}</td>
-                          <td className={tdCls}>{mc.params.autoencoder_weight_decay.toExponential(2)}</td>
+                          <td className={tdCls}>{fmtLR(mc.params.autoencoder_lr)}</td>
+                          <td className={tdCls}>{fmtLR(mc.params.autoencoder_weight_decay)}</td>
                           <td className={tdCls}>{mc.params.lr_decay_epochs.toLocaleString()}</td>
                           <td className={tdCls}>{mc.params.lr_decay_factor}</td>
                           <td className={tdCls}>{String(mc.params.use_imagenet_penalty)}</td>
@@ -355,7 +357,7 @@ export default function QueuePanel() {
 
                     <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{item.set_id ?? '—'}</td>
 
-                    <td className={`sticky right-12 z-[1] w-[4rem] px-2 py-2 whitespace-nowrap ${STATUS_STYLE[item.status] ?? 'text-slate-500'} ${stickyBg}`}>
+                    <td className={`sticky right-12 z-[1] w-[4rem] px-2 py-2 whitespace-nowrap border-l border-slate-200 ${STATUS_STYLE[item.status] ?? 'text-slate-500'} ${stickyBg}`}>
                       {STATUS_LABEL[item.status] ?? item.status}
                     </td>
 
