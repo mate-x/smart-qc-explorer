@@ -102,11 +102,6 @@ export default function Tab1Dataset() {
         {/* 검증 후 배너 */}
         {datasetMeta && (
           <div className="mt-4 flex flex-col gap-2">
-            {!datasetMeta.has_background_clean && (
-              <div className="bg-sky-50 border border-sky-200 rounded-lg px-4 py-2.5 text-xs text-sky-700">
-                배경 분리 이미지 없음 (background_clean/ ❌) — SAM2 사용 시 필요합니다.
-              </div>
-            )}
             {datasetMeta.channels === 1 && (
               <div className="bg-sky-50 border border-sky-200 rounded-lg px-4 py-2.5 text-xs text-sky-700">
                 그레이스케일 이미지로 감지되었습니다. (1채널)

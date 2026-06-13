@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { PreprocessingConfig, ModelConfig } from '../../types/config';
 import type { EfficientAdParamsState, PatchCoreParamsState } from '../../types/modelParams';
 import { useLocalQueueStore } from '../../store/localQueueStore';
+import { useDatasetStore } from '../../store/datasetStore';
 import { DEFAULT_EFFICIENTAD } from './EfficientAdParams';
 import { DEFAULT_PATCHCORE } from './PatchCoreParams';
 
@@ -79,22 +80,27 @@ interface CheckGroupProps {
   options: string[];
   selected: string[];
   onToggle: (opt: string) => void;
+  disabledOptions?: string[];
 }
 
-function CheckGroup({ options, selected, onToggle }: CheckGroupProps) {
+function CheckGroup({ options, selected, onToggle, disabledOptions = [] }: CheckGroupProps) {
   return (
     <div className="flex flex-wrap gap-3">
-      {options.map((opt) => (
-        <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
-          <input
-            type="checkbox"
-            checked={selected.includes(opt)}
-            onChange={() => onToggle(opt)}
-            className="cursor-pointer accent-sky-600"
-          />
-          <span className="text-slate-700">{opt}</span>
-        </label>
-      ))}
+      {options.map((opt) => {
+        const isDisabled = disabledOptions.includes(opt);
+        return (
+          <label key={opt} className={`flex items-center gap-1.5 text-xs ${isDisabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}>
+            <input
+              type="checkbox"
+              checked={selected.includes(opt)}
+              onChange={() => !isDisabled && onToggle(opt)}
+              disabled={isDisabled}
+              className={`accent-sky-600 ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            />
+            <span className={isDisabled ? 'text-slate-400' : 'text-slate-700'}>{opt}</span>
+          </label>
+        );
+      })}
     </div>
   );
 }
@@ -157,6 +163,10 @@ interface Props {
 
 export default function BatchExperimentForm({ preConfig }: Props) {
   const { addLocalItem } = useLocalQueueStore();
+  const { datasetMeta, datasetPath } = useDatasetStore();
+  const availableBgMethods = datasetMeta?.available_bg_methods ?? [];
+  const disabledBgOptions = ['SAM2', 'SAM3'].filter(m => !availableBgMethods.includes(m.toLowerCase()));
+
   const [modelTypes, setModelTypes] = useState<ModelType[]>(['efficientad']);
   const [activeModelTab, setActiveModelTab] = useState<ModelType>('efficientad');
 
@@ -164,6 +174,12 @@ export default function BatchExperimentForm({ preConfig }: Props) {
   const [preMethods, setPreMethods] = useState<string[]>([]);
   const [bgMethods, setBgMethods] = useState<string[]>([]);
   const [imageSizes, setImageSizes] = useState<number[]>([256]);
+
+  useEffect(() => {
+    setBgMethods(prev => prev.filter(m =>
+      m === 'none' || availableBgMethods.includes(m.toLowerCase())
+    ));
+  }, [datasetPath]); // eslint-disable-line react-hooks/exhaustive-deps
   const [commonAdvOpen, setCommonAdvOpen] = useState(false);
   const [batchSizes, setBatchSizes] = useState<number[]>([16]);
   const [randomSeeds, setRandomSeeds] = useState<number[]>([42]);
@@ -251,7 +267,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
     for (const m of methods) {
       const preMethod = m === '없음' ? 'none' : m === 'Homomorphic' ? 'homomorphic' : m === 'HE' ? 'he' : 'clahe';
       for (const bg of bgs) {
-        const bgMethod = bg === 'SAM2' ? 'sam2' : 'none';
+        const bgMethod = bg === 'SAM2' ? 'sam2' : bg === 'SAM3' ? 'sam3' : 'none';
         for (const sz of sizes) {
           const mean = IMAGENET_MEAN;
           const std  = IMAGENET_STD;
@@ -498,10 +514,18 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
           <Field label="배경 분리" required>
             <CheckGroup
-              options={['none', 'SAM2']}
+              options={['none', 'SAM2', 'SAM3']}
               selected={bgMethods}
               onToggle={(opt) => setBgMethods((prev) => toggle(prev, opt))}
+              disabledOptions={disabledBgOptions}
             />
+            {datasetMeta && disabledBgOptions.length > 0 && (
+              <p className="mt-1.5 text-xs text-slate-400">
+                {disabledBgOptions
+                  .map(m => `${datasetPath?.split(/[\\/]/).pop() ?? ''}_${m.toLowerCase()}`)
+                  .join(', ')} 폴더 없음
+              </p>
+            )}
           </Field>
 
           <Field label="이미지 크기">

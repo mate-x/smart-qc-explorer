@@ -69,6 +69,16 @@ export default function Tab2Config() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!datasetMeta) return;
+    const available = datasetMeta.available_bg_methods ?? [];
+    setPreConfig(prev =>
+      prev.background_method !== 'none' && !available.includes(prev.background_method)
+        ? { ...prev, background_method: 'none' }
+        : prev,
+    );
+  }, [datasetPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleAddToQueue() {
     if (preConfig.image_size % 32 !== 0) {
       setAddError('이미지 크기가 32의 배수가 아닙니다.');
