@@ -1,6 +1,12 @@
 import { useState } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  ResponsiveContainer,
+} from 'recharts';
 import type { Experiment, ExperimentMetrics } from '../../types/experiments';
 import { paramSummary, fmt } from './experimentUtils';
+import { COMPARE_METRICS } from './ComparisonSection';
 
 const BATCH_SORT_METRICS = ['AUC', 'F1', 'F2', 'Recall', 'Precision', 'Accuracy'] as const;
 type SortMetric = (typeof BATCH_SORT_METRICS)[number];
@@ -14,9 +20,16 @@ const BATCH_METRIC_KEYS: Record<SortMetric, keyof ExperimentMetrics> = {
   Accuracy: 'accuracy',
 };
 
+const CHART_COLORS = [
+  '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
+  '#0891b2', '#db2777', '#65a30d', '#9333ea', '#c2410c',
+];
+
 export default function BatchComparisonSection({ experiments }: { experiments: Experiment[] }) {
   const [filterSetId, setFilterSetId] = useState('__all__');
   const [sortBy, setSortBy] = useState<SortMetric>('AUC');
+  const [chartType, setChartType] = useState<'bar' | 'radar'>('bar');
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['Accuracy', 'F1', 'AUC']);
 
   const batch = experiments.filter(e => e.set_id);
   if (batch.length === 0) return null;
@@ -34,6 +47,22 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
   const completed = [...filtered.filter(e => e.status === 'completed')].sort((a, b) => {
     const mk = BATCH_METRIC_KEYS[sortBy];
     return (b.metrics?.[mk] ?? 0) > (a.metrics?.[mk] ?? 0) ? 1 : -1;
+  });
+
+  const chartData = completed.slice(0, 10);
+
+  const barData = chartData.map(e => {
+    const row: Record<string, string | number> = { 실험명: e.name };
+    for (const { key, label } of COMPARE_METRICS)
+      if (selectedMetrics.includes(label)) row[label] = e.metrics?.[key] ?? 0;
+    return row;
+  });
+
+  const radarData = selectedMetrics.map(label => {
+    const mk = COMPARE_METRICS.find(m => m.label === label)?.key;
+    const row: Record<string, string | number> = { metric: label };
+    for (const e of chartData) row[e.name] = mk ? (e.metrics?.[mk] ?? 0) : 0;
+    return row;
   });
 
   return (
@@ -118,6 +147,73 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
               </table>
             </div>
             <p className="text-xs text-slate-400">총 {completed.length}개 완료된 배치 실험</p>
+
+            {completed.length > 10 && (
+              <p className="text-xs text-amber-600">상위 10개만 표시됩니다.</p>
+            )}
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <span className="text-xs text-slate-500">메트릭:</span>
+              {COMPARE_METRICS.map(({ label }) => (
+                <label key={label} className="flex items-center gap-1 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedMetrics.includes(label)}
+                    onChange={() => setSelectedMetrics(prev =>
+                      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label],
+                    )}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-4 text-xs">
+              {(['bar', 'radar'] as const).map(t => (
+                <label key={t} className="flex items-center gap-1 cursor-pointer">
+                  <input type="radio" checked={chartType === t} onChange={() => setChartType(t)} />
+                  {t === 'bar' ? '막대 차트' : '레이더 차트'}
+                </label>
+              ))}
+            </div>
+
+            {chartData.length < 2 ? (
+              <p className="text-xs text-sky-600">비교 차트를 보려면 완료된 실험이 2개 이상 필요합니다.</p>
+            ) : selectedMetrics.length === 0 ? null : chartType === 'bar' ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={barData} margin={{ top: 5, right: 10, bottom: 20, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="실험명" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {selectedMetrics.map((label, i) => (
+                    <Bar key={label} dataKey={label} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : selectedMetrics.length < 2 ? (
+              <p className="text-xs text-sky-600">레이더 차트는 메트릭을 2개 이상 선택해야 합니다.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <RadarChart data={radarData}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11 }} />
+                  <PolarRadiusAxis domain={[0, 1]} tick={{ fontSize: 9 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {chartData.map((e, i) => (
+                    <Radar
+                      key={e.experiment_id}
+                      dataKey={e.name}
+                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      fill={CHART_COLORS[i % CHART_COLORS.length]}
+                      fillOpacity={0.15}
+                    />
+                  ))}
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
           </>
         )}
       </div>
