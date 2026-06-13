@@ -27,7 +27,6 @@ export default function QueueSection() {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-  const [expName, setExpName] = useState('');
 
   const groupHeaderRowRef = useRef<HTMLTableRowElement>(null);
   const [groupHeaderHeight, setGroupHeaderHeight] = useState(36);
@@ -50,16 +49,14 @@ export default function QueueSection() {
 
     setConfigs(localItems[0].preprocessing_config, localItems[0].model_config);
 
-    const sharedSetId = 'SET_' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
-
     const snapshot = [...localItems];
     let successCount = 0;
     let errorMsg = '';
     let failed = false;
 
     for (const item of snapshot) {
-      const effectiveSetId = item.set_id ?? sharedSetId;
-      const effectiveName = expName.trim() || item.name || undefined;
+      const effectiveSetId = item.set_id ?? ('SET_' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase());
+      const effectiveName = item.name || undefined;
       try {
         await addToQueue(item.preprocessing_config, item.model_config, effectiveSetId, effectiveName);
         successCount++;
@@ -75,7 +72,6 @@ export default function QueueSection() {
       clearLocalItems();
       clearLastResult();
       setSelectedIndex(null);
-      setExpName('');
     } else {
       for (let i = 0; i < successCount; i++) {
         deleteLocalItem(0);
@@ -385,16 +381,8 @@ export default function QueueSection() {
             </div>
           )}
 
-          {/* 실험명 입력 + 확정 버튼 */}
+          {/* 확정 버튼 */}
           <div className="flex items-center gap-2 justify-end">
-            <input
-              type="text"
-              value={expName}
-              onChange={(e) => setExpName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !confirmLoading && handleConfirmClick()}
-              placeholder="실험명 (비워두면 자동 생성)"
-              className="w-64 border border-slate-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
-            />
             <button
               type="button"
               onClick={handleConfirmClick}
