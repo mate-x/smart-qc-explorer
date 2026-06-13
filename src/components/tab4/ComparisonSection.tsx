@@ -6,14 +6,15 @@ import {
 } from 'recharts';
 import type { Experiment } from '../../types/experiments';
 
-type NumericMetricKey = 'accuracy' | 'precision' | 'recall' | 'f1_score' | 'f2_score';
+export type NumericMetricKey = 'accuracy' | 'precision' | 'recall' | 'f1_score' | 'f2_score' | 'auc';
 
-const COMPARE_METRICS: { key: NumericMetricKey; label: string }[] = [
+export const COMPARE_METRICS: { key: NumericMetricKey; label: string }[] = [
   { key: 'accuracy', label: 'Accuracy' },
   { key: 'precision', label: 'Precision' },
   { key: 'recall', label: 'Recall' },
   { key: 'f1_score', label: 'F1' },
   { key: 'f2_score', label: 'F2' },
+  { key: 'auc', label: 'AUC' },
 ];
 
 const CHART_COLORS = [
@@ -24,7 +25,7 @@ const CHART_COLORS = [
 export default function ComparisonSection({ completed }: { completed: Experiment[] }) {
   const [open, setOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['Accuracy', 'F1']);
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['Accuracy', 'F1', 'AUC']);
   const [chartType, setChartType] = useState<'bar' | 'radar'>('bar');
 
   const toggleId = (id: string) =>
