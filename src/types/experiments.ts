@@ -32,7 +32,7 @@ export interface Experiment {
   // 배치 비교 / 상세 표시용 추가 필드
   preprocessing_method?: string;
   preprocessing_params?: Record<string, unknown> | null;
-  background_method?: 'none' | 'sam2';
+  background_method?: 'none' | 'sam2' | 'sam3';
   model_params?: Record<string, unknown>;
   threshold_method?: string;
   threshold_value?: number;

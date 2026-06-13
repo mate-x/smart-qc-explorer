@@ -4,7 +4,7 @@ export type { EfficientAdParamsState, PatchCoreParamsState };
 
 export interface PreprocessingConfig {
   method: 'none' | 'homomorphic' | 'he' | 'clahe';
-  background_method: 'none' | 'sam2';
+  background_method: 'none' | 'sam2' | 'sam3';
   resize_mode: 'padding';
   image_size: number;
   normalization: 'imagenet';
