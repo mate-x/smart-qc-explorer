@@ -89,15 +89,20 @@ export const useTrainingStore = create<TrainingState>((set) => ({
 
   setPaused: (ckptPath) => set({ status: 'paused', last_ckpt_path: ckptPath }),
 
-  setCompleted: (_expId, auc, durationSecs, message, earlyStopped) =>
+  setCompleted: (_expId, auc, durationSecs, message, earlyStopped) => {
+    const h = Math.floor(durationSecs / 3600);
+    const m = Math.floor((durationSecs % 3600) / 60);
+    const sec = Math.floor(durationSecs % 60);
+    const durStr = h > 0 ? `${h}시간 ${m}분 ${sec}초` : m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
     set({
       status: 'idle',
       progress: null,
       last_result: {
         level: 'success',
-        msg: message || `${earlyStopped ? '[Early Stopping] ' : ''}학습 완료. AUC: ${auc.toFixed(4)} | ${Math.floor(durationSecs / 60)}분 ${durationSecs % 60}초`,
+        msg: message || `${earlyStopped ? '[Early Stopping] ' : ''}학습 완료. AUC: ${auc.toFixed(4)} | ${durStr}`,
       },
-    }),
+    });
+  },
 
   setStopped: () =>
     set({
