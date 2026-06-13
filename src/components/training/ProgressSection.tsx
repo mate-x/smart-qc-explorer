@@ -17,8 +17,10 @@ function downsample(points: LossPoint[], max = 500): LossPoint[] {
 }
 
 function fmtSecs(s: number): string {
-  const m = Math.floor(s / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const sec = Math.floor(s % 60);
+  if (h > 0) return `${h}시간 ${m}분 ${sec}초`;
   return m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
 }
 
@@ -34,11 +36,29 @@ export default function ProgressSection() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log_lines]);
 
+  const inferenceBaseRef = useRef<number>(0);
+  const [inferenceCount, setInferenceCount] = useState(0);
+
   const pct = progress ? Math.min(100, Math.round((progress.step / progress.total) * 100)) : 0;
   const ratio = progress ? progress.step / progress.total : 0;
   const etaSecs = ratio > 0 && progress ? Math.round((progress.elapsed / ratio) * (1 - ratio)) : null;
   const chartData = downsample(loss_history, 500);
   const isInferenceStage = current_stage_name === '테스트 추론' || current_stage_name === '완료';
+
+  useEffect(() => {
+    if (!isInferenceStage) {
+      setInferenceCount(0);
+      return;
+    }
+    inferenceBaseRef.current = progress?.elapsed ?? 0;
+    setInferenceCount(0);
+    let count = 0;
+    const timer = setInterval(() => {
+      count += 1;
+      setInferenceCount(count);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isInferenceStage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePauseToggle() {
     setPauseLoading(true);
@@ -86,7 +106,7 @@ export default function ProgressSection() {
           <span className="inline-block w-4 h-4 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin shrink-0" />
           <span className="text-sm font-medium text-violet-700">테스트 추론 진행 중...</span>
           {progress && (
-            <span className="text-xs text-slate-400">경과: {fmtSecs(progress.elapsed)}</span>
+            <span className="text-xs text-slate-400">경과: {fmtSecs(inferenceBaseRef.current + inferenceCount)}</span>
           )}
         </div>
       ) : progress ? (
