@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -7,6 +7,7 @@ import {
 import type { Experiment, ExperimentMetrics } from '../../types/experiments';
 import { paramSummary, fmt } from './experimentUtils';
 import { COMPARE_METRICS } from './ComparisonSection';
+import { useBatchCompColumnStore } from '../../store/batchCompColumnStore';
 
 const BATCH_SORT_METRICS = ['AUC', 'F1', 'F2', 'Recall', 'Precision', 'Accuracy'] as const;
 type SortMetric = (typeof BATCH_SORT_METRICS)[number];
@@ -25,14 +26,24 @@ const CHART_COLORS = [
   '#0891b2', '#db2777', '#65a30d', '#9333ea', '#c2410c',
 ];
 
+const LEARN_COL_COUNT = 6;
+const METRIC_COL_COUNT = 6;
+
+const thCls = 'px-2 py-1.5 text-left text-xs font-semibold text-slate-500 whitespace-nowrap bg-slate-50 border-b border-slate-200';
+const thGroupCls = `${thCls} cursor-pointer select-none hover:bg-slate-100 transition-colors border-l border-slate-200`;
+const tdCls = 'px-2 py-1.5 text-slate-600 whitespace-nowrap border-b border-slate-100';
+
 export default function BatchComparisonSection({ experiments }: { experiments: Experiment[] }) {
   const [filterSetId, setFilterSetId] = useState('__all__');
   const [sortBy, setSortBy] = useState<SortMetric>('AUC');
   const [chartType, setChartType] = useState<'bar' | 'radar'>('bar');
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['Accuracy', 'F1', 'AUC']);
+  const { learningOpen, metricsOpen, setLearningOpen, setMetricsOpen } = useBatchCompColumnStore();
+
+  const groupHeaderRowRef = useRef<HTMLTableRowElement>(null);
+  const [groupHeaderHeight, setGroupHeaderHeight] = useState(32);
 
   const batch = experiments.filter(e => e.set_id);
-  if (batch.length === 0) return null;
 
   const setMeta: Record<string, { count: number; date: string }> = {};
   for (const e of batch) {
@@ -41,6 +52,22 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
     setMeta[sid].count++;
   }
   const setIds = Object.keys(setMeta);
+
+  useEffect(() => {
+    if (setIds.length <= 1) setFilterSetId('__all__');
+  }, [setIds.length]);
+
+  useEffect(() => {
+    const el = groupHeaderRowRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setGroupHeaderHeight(el.getBoundingClientRect().height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  if (batch.length === 0) return null;
 
   const filtered =
     filterSetId === '__all__' ? batch : batch.filter(e => e.set_id === filterSetId);
@@ -72,21 +99,23 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
       </div>
       <div className="px-5 py-4 flex flex-col gap-2">
         <div className="flex gap-3 flex-wrap items-center">
-          <div>
-            <label className="text-xs text-slate-500 mr-1">실험 세트</label>
-            <select
-              value={filterSetId}
-              onChange={e => setFilterSetId(e.target.value)}
-              className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
-            >
-              <option value="__all__">(전체 배치 실험)</option>
-              {setIds.map(sid => (
-                <option key={sid} value={sid}>
-                  {sid} ({setMeta[sid].count}개, {setMeta[sid].date})
-                </option>
-              ))}
-            </select>
-          </div>
+          {setIds.length > 1 && (
+            <div>
+              <label className="text-xs text-slate-500 mr-1">실험 세트</label>
+              <select
+                value={filterSetId}
+                onChange={e => setFilterSetId(e.target.value)}
+                className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
+              >
+                <option value="__all__">(전체 배치 실험)</option>
+                {setIds.map(sid => (
+                  <option key={sid} value={sid}>
+                    {sid} ({setMeta[sid].count}개, {setMeta[sid].date})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="text-xs text-slate-500 mr-1">정렬 기준</label>
             <select
@@ -106,41 +135,89 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
           </p>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="text-xs border-collapse min-w-full">
+            <div className="overflow-x-auto rounded border border-slate-200">
+              <table className="text-xs border-separate border-spacing-0 min-w-full">
                 <thead>
-                  <tr className="bg-slate-50">
-                    {['실험명','세트ID','모델','전처리','이미지크기','파라미터요약',
-                      'Th방식','Th값','Accuracy','Precision','Recall','F1','F2','AUC','실행시각'].map(h => (
-                      <th
-                        key={h}
-                        className="border border-slate-200 px-2 py-1.5 text-left whitespace-nowrap font-medium text-slate-600"
-                      >
-                        {h}
-                      </th>
-                    ))}
+                  {/* Row 1: 그룹 헤더 */}
+                  <tr ref={groupHeaderRowRef}>
+                    <th rowSpan={2} className={`sticky left-0 z-30 border-r border-slate-200 ${thCls}`}>실험명</th>
+                    <th
+                      colSpan={learningOpen ? LEARN_COL_COUNT : 1}
+                      className={thGroupCls}
+                      onClick={() => setLearningOpen(!learningOpen)}
+                    >
+                      {learningOpen ? '▾' : '▸'} [학습설정]
+                    </th>
+                    <th
+                      colSpan={metricsOpen ? METRIC_COL_COUNT : 1}
+                      className={thGroupCls}
+                      onClick={() => setMetricsOpen(!metricsOpen)}
+                    >
+                      {metricsOpen ? '▾' : '▸'} [메트릭]
+                    </th>
+                    <th rowSpan={2} className={thCls}>세트ID</th>
+                    <th rowSpan={2} className={thCls}>실행시각</th>
+                  </tr>
+                  {/* Row 2: 컬럼 헤더 */}
+                  <tr style={{ top: groupHeaderHeight }}>
+                    {learningOpen ? (
+                      <>
+                        <th className={`sticky z-10 ${thCls}`}>모델</th>
+                        <th className={`sticky z-10 ${thCls}`}>전처리</th>
+                        <th className={`sticky z-10 ${thCls}`}>이미지크기</th>
+                        <th className={`sticky z-10 ${thCls}`}>파라미터요약</th>
+                        <th className={`sticky z-10 ${thCls}`}>Th방식</th>
+                        <th className={`sticky z-10 ${thCls}`}>Th값</th>
+                      </>
+                    ) : (
+                      <th />
+                    )}
+                    {metricsOpen ? (
+                      <>
+                        <th className={`sticky z-10 ${thCls}`}>Accuracy</th>
+                        <th className={`sticky z-10 ${thCls}`}>Precision</th>
+                        <th className={`sticky z-10 ${thCls}`}>Recall</th>
+                        <th className={`sticky z-10 ${thCls}`}>F1</th>
+                        <th className={`sticky z-10 ${thCls}`}>F2</th>
+                        <th className={`sticky z-10 ${thCls}`}>AUC</th>
+                      </>
+                    ) : (
+                      <th />
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {completed.map(e => (
-                    <tr key={e.experiment_id} className="hover:bg-slate-50">
-                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{e.name}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{e.set_id ?? ''}</td>
-                      <td className="border border-slate-200 px-2 py-1.5">{e.model_type}</td>
-                      <td className="border border-slate-200 px-2 py-1.5">{e.preprocessing_method ?? ''}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right">{e.image_size ?? ''}</td>
-                      <td className="border border-slate-200 px-2 py-1.5">{paramSummary(e)}</td>
-                      <td className="border border-slate-200 px-2 py-1.5">{e.threshold_method ?? ''}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right">{e.threshold_value ?? ''}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.accuracy)}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.precision)}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.recall)}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f1_score)}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f2_score)}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-right font-semibold">{fmt(e.metrics?.auc)}</td>
-                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">
-                        {e.created_at.slice(0, 19).replace('T', ' ')}
+                    <tr key={e.experiment_id} className="group hover:bg-slate-50">
+                      <td className={`sticky left-0 z-[1] border-r border-slate-200 border-b border-slate-100 px-2 py-1.5 whitespace-nowrap bg-white group-hover:bg-slate-50`}>
+                        {e.name}
                       </td>
+                      {learningOpen ? (
+                        <>
+                          <td className={tdCls}>{e.model_type}</td>
+                          <td className={tdCls}>{e.preprocessing_method ?? ''}</td>
+                          <td className={`${tdCls} text-right`}>{e.image_size ?? ''}</td>
+                          <td className={tdCls}>{paramSummary(e)}</td>
+                          <td className={tdCls}>{e.threshold_method ?? ''}</td>
+                          <td className={`${tdCls} text-right`}>{e.threshold_value ?? ''}</td>
+                        </>
+                      ) : (
+                        <td className={tdCls} />
+                      )}
+                      {metricsOpen ? (
+                        <>
+                          <td className={`${tdCls} text-right`}>{fmt(e.metrics?.accuracy)}</td>
+                          <td className={`${tdCls} text-right`}>{fmt(e.metrics?.precision)}</td>
+                          <td className={`${tdCls} text-right`}>{fmt(e.metrics?.recall)}</td>
+                          <td className={`${tdCls} text-right`}>{fmt(e.metrics?.f1_score)}</td>
+                          <td className={`${tdCls} text-right`}>{fmt(e.metrics?.f2_score)}</td>
+                          <td className={`${tdCls} text-right font-semibold`}>{fmt(e.metrics?.auc)}</td>
+                        </>
+                      ) : (
+                        <td className={tdCls} />
+                      )}
+                      <td className={tdCls}>{e.set_id ?? ''}</td>
+                      <td className={`${tdCls} whitespace-nowrap`}>{e.created_at.slice(0, 19).replace('T', ' ')}</td>
                     </tr>
                   ))}
                 </tbody>
