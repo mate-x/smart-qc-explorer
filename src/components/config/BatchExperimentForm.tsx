@@ -162,7 +162,7 @@ interface Props {
 }
 
 export default function BatchExperimentForm({ preConfig }: Props) {
-  const { addLocalItem } = useLocalQueueStore();
+  const { addLocalItem, getOrCreateSetId } = useLocalQueueStore();
   const { datasetMeta, datasetPath } = useDatasetStore();
   const availableBgMethods = datasetMeta?.available_bg_methods ?? [];
   const disabledBgOptions = ['SAM2', 'SAM3'].filter(m => !availableBgMethods.includes(m.toLowerCase()));
@@ -468,7 +468,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
 
   function handleAdd() {
     if (combos.length === 0) return;
-    const setId = `SET_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+    const setId = getOrCreateSetId();
     combos.forEach((row) => {
       addLocalItem(row.preprocessing_config, row.model_config, setId);
     });
