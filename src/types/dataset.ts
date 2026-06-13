@@ -10,7 +10,7 @@ export interface DatasetValidateResponse {
   has_invalid_files: boolean;
   invalid_file_count: number;
   folder_tree: string;
-  has_background_clean: boolean;
+  available_bg_methods: string[];
   // OK/NG 전용
   oking_ok_dir?: string | null;
   oking_ng_dir?: string | null;

@@ -1,6 +1,12 @@
 import { useState } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  ResponsiveContainer,
+} from 'recharts';
 import type { Experiment, ExperimentMetrics } from '../../types/experiments';
 import { paramSummary, fmt } from './experimentUtils';
+import { COMPARE_METRICS } from './ComparisonSection';
 
 const BATCH_SORT_METRICS = ['AUC', 'F1', 'F2', 'Recall', 'Precision', 'Accuracy'] as const;
 type SortMetric = (typeof BATCH_SORT_METRICS)[number];
@@ -14,12 +20,19 @@ const BATCH_METRIC_KEYS: Record<SortMetric, keyof ExperimentMetrics> = {
   Accuracy: 'accuracy',
 };
 
-export default function BatchComparisonSection({ experiments }: { experiments: Experiment[] }) {
-  const batch = experiments.filter(e => e.set_id);
-  if (batch.length === 0) return null;
+const CHART_COLORS = [
+  '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
+  '#0891b2', '#db2777', '#65a30d', '#9333ea', '#c2410c',
+];
 
+export default function BatchComparisonSection({ experiments }: { experiments: Experiment[] }) {
   const [filterSetId, setFilterSetId] = useState('__all__');
   const [sortBy, setSortBy] = useState<SortMetric>('AUC');
+  const [chartType, setChartType] = useState<'bar' | 'radar'>('bar');
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['Accuracy', 'F1', 'AUC']);
+
+  const batch = experiments.filter(e => e.set_id);
+  if (batch.length === 0) return null;
 
   const setMeta: Record<string, { count: number; date: string }> = {};
   for (const e of batch) {
@@ -36,87 +49,174 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
     return (b.metrics?.[mk] ?? 0) > (a.metrics?.[mk] ?? 0) ? 1 : -1;
   });
 
-  return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold text-gray-700">배치 실험 비교</h3>
-      <div className="flex gap-3 flex-wrap items-center">
-        <div>
-          <label className="text-xs text-gray-500 mr-1">실험 세트</label>
-          <select
-            value={filterSetId}
-            onChange={e => setFilterSetId(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none"
-          >
-            <option value="__all__">(전체 배치 실험)</option>
-            {setIds.map(sid => (
-              <option key={sid} value={sid}>
-                {sid} ({setMeta[sid].count}개, {setMeta[sid].date})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 mr-1">정렬 기준</label>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortMetric)}
-            className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none"
-          >
-            {BATCH_SORT_METRICS.map(m => <option key={m}>{m}</option>)}
-          </select>
-        </div>
-      </div>
+  const chartData = completed.slice(0, 10);
 
-      {completed.length === 0 ? (
-        <p className="text-xs text-blue-600">
-          완료된 배치 실험이 없습니다. (미완료/실패:{' '}
-          {filtered.filter(e => e.status !== 'completed').length}개)
-        </p>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="text-xs border-collapse min-w-full">
-              <thead>
-                <tr className="bg-gray-100">
-                  {['실험명','세트ID','모델','전처리','이미지크기','파라미터요약',
-                    'Th방식','Th값','Accuracy','Precision','Recall','F1','F2','AUC','실행시각'].map(h => (
-                    <th
-                      key={h}
-                      className="border border-gray-200 px-2 py-1.5 text-left whitespace-nowrap font-medium"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {completed.map(e => (
-                  <tr key={e.experiment_id} className="hover:bg-gray-50">
-                    <td className="border border-gray-200 px-2 py-1.5 whitespace-nowrap">{e.name}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 whitespace-nowrap">{e.set_id ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{e.model_type}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{e.preprocessing_method ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{e.image_size ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{paramSummary(e)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5">{e.threshold_method ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{e.threshold_value ?? ''}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.accuracy)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.precision)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.recall)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f1_score)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f2_score)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-right font-semibold">{fmt(e.metrics?.auc)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 whitespace-nowrap">
-                      {e.created_at.slice(0, 19).replace('T', ' ')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  const barData = chartData.map(e => {
+    const row: Record<string, string | number> = { 실험명: e.name };
+    for (const { key, label } of COMPARE_METRICS)
+      if (selectedMetrics.includes(label)) row[label] = e.metrics?.[key] ?? 0;
+    return row;
+  });
+
+  const radarData = selectedMetrics.map(label => {
+    const mk = COMPARE_METRICS.find(m => m.label === label)?.key;
+    const row: Record<string, string | number> = { metric: label };
+    for (const e of chartData) row[e.name] = mk ? (e.metrics?.[mk] ?? 0) : 0;
+    return row;
+  });
+
+  return (
+    <>
+      <div className="px-5 py-4 border-b border-slate-100">
+        <h3 className="text-sm font-semibold text-slate-800">배치 실험 비교</h3>
+      </div>
+      <div className="px-5 py-4 flex flex-col gap-2">
+        <div className="flex gap-3 flex-wrap items-center">
+          <div>
+            <label className="text-xs text-slate-500 mr-1">실험 세트</label>
+            <select
+              value={filterSetId}
+              onChange={e => setFilterSetId(e.target.value)}
+              className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
+            >
+              <option value="__all__">(전체 배치 실험)</option>
+              {setIds.map(sid => (
+                <option key={sid} value={sid}>
+                  {sid} ({setMeta[sid].count}개, {setMeta[sid].date})
+                </option>
+              ))}
+            </select>
           </div>
-          <p className="text-xs text-gray-400">총 {completed.length}개 완료된 배치 실험</p>
-        </>
-      )}
-    </div>
+          <div>
+            <label className="text-xs text-slate-500 mr-1">정렬 기준</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as SortMetric)}
+              className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
+            >
+              {BATCH_SORT_METRICS.map(m => <option key={m}>{m}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {completed.length === 0 ? (
+          <p className="text-xs text-sky-600">
+            완료된 배치 실험이 없습니다. (미완료/실패:{' '}
+            {filtered.filter(e => e.status !== 'completed').length}개)
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="text-xs border-collapse min-w-full">
+                <thead>
+                  <tr className="bg-slate-50">
+                    {['실험명','세트ID','모델','전처리','이미지크기','파라미터요약',
+                      'Th방식','Th값','Accuracy','Precision','Recall','F1','F2','AUC','실행시각'].map(h => (
+                      <th
+                        key={h}
+                        className="border border-slate-200 px-2 py-1.5 text-left whitespace-nowrap font-medium text-slate-600"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {completed.map(e => (
+                    <tr key={e.experiment_id} className="hover:bg-slate-50">
+                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{e.name}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{e.set_id ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{e.model_type}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{e.preprocessing_method ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{e.image_size ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{paramSummary(e)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5">{e.threshold_method ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{e.threshold_value ?? ''}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.accuracy)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.precision)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.recall)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f1_score)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right">{fmt(e.metrics?.f2_score)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-right font-semibold">{fmt(e.metrics?.auc)}</td>
+                      <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">
+                        {e.created_at.slice(0, 19).replace('T', ' ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-slate-400">총 {completed.length}개 완료된 배치 실험</p>
+
+            {completed.length > 10 && (
+              <p className="text-xs text-amber-600">상위 10개만 표시됩니다.</p>
+            )}
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <span className="text-xs text-slate-500">메트릭:</span>
+              {COMPARE_METRICS.map(({ label }) => (
+                <label key={label} className="flex items-center gap-1 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedMetrics.includes(label)}
+                    onChange={() => setSelectedMetrics(prev =>
+                      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label],
+                    )}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-4 text-xs">
+              {(['bar', 'radar'] as const).map(t => (
+                <label key={t} className="flex items-center gap-1 cursor-pointer">
+                  <input type="radio" checked={chartType === t} onChange={() => setChartType(t)} />
+                  {t === 'bar' ? '막대 차트' : '레이더 차트'}
+                </label>
+              ))}
+            </div>
+
+            {chartData.length < 2 ? (
+              <p className="text-xs text-sky-600">비교 차트를 보려면 완료된 실험이 2개 이상 필요합니다.</p>
+            ) : selectedMetrics.length === 0 ? null : chartType === 'bar' ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={barData} margin={{ top: 5, right: 10, bottom: 20, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="실험명" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {selectedMetrics.map((label, i) => (
+                    <Bar key={label} dataKey={label} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : selectedMetrics.length < 2 ? (
+              <p className="text-xs text-sky-600">레이더 차트는 메트릭을 2개 이상 선택해야 합니다.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <RadarChart data={radarData}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11 }} />
+                  <PolarRadiusAxis domain={[0, 1]} tick={{ fontSize: 9 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {chartData.map((e, i) => (
+                    <Radar
+                      key={e.experiment_id}
+                      dataKey={e.name}
+                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      fill={CHART_COLORS[i % CHART_COLORS.length]}
+                      fillOpacity={0.15}
+                    />
+                  ))}
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { DatasetValidateResponse } from '../types/dataset';
 
 interface DatasetState {
@@ -9,11 +10,19 @@ interface DatasetState {
   clearDataset: () => void;
 }
 
-export const useDatasetStore = create<DatasetState>((set) => ({
-  datasetPath: null,
-  productName: '',
-  datasetMeta: null,
-  setDataset: (path, meta, productName) =>
-    set({ datasetPath: path, datasetMeta: meta, productName }),
-  clearDataset: () => set({ datasetPath: null, datasetMeta: null, productName: '' }),
-}));
+export const useDatasetStore = create<DatasetState>()(
+  persist(
+    (set) => ({
+      datasetPath: null,
+      productName: '',
+      datasetMeta: null,
+      setDataset: (path, meta, productName) =>
+        set({ datasetPath: path, datasetMeta: meta, productName }),
+      clearDataset: () => set({ datasetPath: null, datasetMeta: null, productName: '' }),
+    }),
+    {
+      name: 'smart-qc-dataset-store',
+      storage: createJSONStorage(() => sessionStorage),
+    },
+  ),
+);

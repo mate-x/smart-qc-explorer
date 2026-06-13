@@ -1,378 +1,435 @@
-import { useState, useEffect } from 'react';
-import type { PreprocessingConfig, ModelConfig, QueueItem } from '../../types/config';
-import { getQueue, addToQueue, deleteQueueItem, reorderQueueItem } from '../../api/configApi';
+import { useState, useRef, useEffect } from 'react';
+import { useLocalQueueStore } from '../../store/localQueueStore';
 import { useTrainingStore } from '../../store/trainingStore';
+import { useConfigStore } from '../../store/configStore';
+import { useQueueColumnStore } from '../../store/queueColumnStore';
+import { addToQueue } from '../../api/configApi';
+import ConfirmModal from '../common/ConfirmModal';
 
-interface Props {
-  preprocessingConfig: PreprocessingConfig;
-  modelConfig: ModelConfig;
-}
+const EFF_COL_COUNT = 18;
+const PC_COL_COUNT = 6;
+const PAGE_SIZE = 10;
 
-type VarValues = Record<string, unknown[]>;
+const thCls = 'px-2 py-2 text-left text-xs font-semibold text-slate-500 whitespace-nowrap bg-slate-50 border-b border-slate-200';
+const thGroupCls = `${thCls} cursor-pointer select-none hover:bg-slate-100 transition-colors border-l border-slate-200`;
+const tdCls = 'px-2 py-2 text-slate-600 whitespace-nowrap';
+const tdDashCls = 'px-2 py-2 text-slate-300 whitespace-nowrap';
 
-// ---------- Cartesian product 유틸 ----------
+export default function QueueSection() {
+  const { localItems, deleteLocalItem, reorderLocalItem, clearLocalItems } = useLocalQueueStore();
+  const { status, clearLastResult } = useTrainingStore();
+  const { setConfigs } = useConfigStore();
+  const { commonOpen, efficientadOpen, patchcoreOpen,
+          setCommonOpen, setEfficientadOpen, setPatchcoreOpen } = useQueueColumnStore();
 
-function generateCombinations<T extends object>(baseParams: T, variables: VarValues): T[] {
-  const base = baseParams as Record<string, unknown>;
-  const keys = Object.keys(variables).filter((k) => variables[k].length > 0);
-  if (keys.length === 0) return [{ ...base }] as T[];
-  let combos: Record<string, unknown>[] = [{ ...base }];
-  for (const key of keys) {
-    const next: Record<string, unknown>[] = [];
-    for (const combo of combos) {
-      for (const val of variables[key]) {
-        next.push({ ...combo, [key]: val });
+  const [page, setPage] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  const groupHeaderRowRef = useRef<HTMLTableRowElement>(null);
+  const [groupHeaderHeight, setGroupHeaderHeight] = useState(36);
+
+  useEffect(() => {
+    const el = groupHeaderRowRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setGroupHeaderHeight(el.getBoundingClientRect().height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  async function submitQueue() {
+    if (localItems.length === 0) return;
+    setConfirmLoading(true);
+    setConfirmError(null);
+    setConfirmModalOpen(false);
+
+    setConfigs(localItems[0].preprocessing_config, localItems[0].model_config);
+
+    const snapshot = [...localItems];
+    let successCount = 0;
+    let errorMsg = '';
+    let failed = false;
+
+    for (const item of snapshot) {
+      const effectiveSetId = item.set_id ?? ('SET_' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase());
+      const effectiveName = item.name || undefined;
+      try {
+        await addToQueue(item.preprocessing_config, item.model_config, effectiveSetId, effectiveName);
+        successCount++;
+      } catch (e: unknown) {
+        const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+        errorMsg = typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '확정 실패';
+        failed = true;
+        break;
       }
     }
-    combos = next;
-  }
-  return combos as T[];
-}
 
-function parseNumList(s: string): number[] {
-  return s.split(',').map((x) => parseFloat(x.trim())).filter((n) => !isNaN(n));
-}
-
-const EFF_VARS = [
-  { key: 'model_size', label: 'Model Size', type: 'enum', options: ['small', 'medium'] },
-  { key: 'train_steps', label: 'Train Steps', type: 'number_list', hint: '예: 30000,70000' },
-  { key: 'optimizer', label: 'Optimizer', type: 'enum', options: ['adam', 'adamw', 'sgd'] },
-  { key: 'learning_rate', label: 'Learning Rate', type: 'number_list', hint: '예: 0.0001,0.001' },
-] as const;
-
-const PC_VARS = [
-  { key: 'backbone', label: 'Backbone', type: 'enum', options: ['resnet18', 'resnet50', 'wide_resnet50_2'] },
-  { key: 'coreset_sampling_ratio', label: 'Coreset Ratio', type: 'number_list', hint: '예: 0.05,0.1' },
-] as const;
-
-const STATUS_COLOR: Record<string, string> = {
-  pending: 'text-slate-500',
-  running: 'text-sky-600 font-semibold',
-  completed: 'text-emerald-600',
-  failed: 'text-red-500',
-  skipped: 'text-slate-400',
-};
-
-const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow';
-
-// ---------- 컴포넌트 ----------
-
-export default function QueueSection({ preprocessingConfig, modelConfig }: Props) {
-  const { clearLastResult } = useTrainingStore();
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [addLoading, setAddLoading] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [reorderLoading, setReorderLoading] = useState(false);
-
-  // 자동 실험 설계
-  const [batchOpen, setBatchOpen] = useState(false);
-  const [setId, setSetId] = useState('');
-  const [enumSelections, setEnumSelections] = useState<Record<string, string[]>>({});
-  const [numInputs, setNumInputs] = useState<Record<string, string>>({});
-  const [batchAddLoading, setBatchAddLoading] = useState(false);
-  const [batchAddError, setBatchAddError] = useState<string | null>(null);
-  const [batchPreview, setBatchPreview] = useState<number | null>(null);
-
-  async function loadQueue() {
-    try {
-      const res = await getQueue();
-      setQueue(res.data);
-      setLoadError(null);
-    } catch (e: unknown) {
-      setLoadError((e as { message?: string })?.message ?? '큐 로드 실패');
-    }
-  }
-
-  useEffect(() => { loadQueue(); }, []);
-
-  async function handleAdd() {
-    setAddLoading(true);
-    setAddError(null);
-    try {
-      await addToQueue(preprocessingConfig, modelConfig);
-      await loadQueue();
+    if (!failed) {
+      clearLocalItems();
       clearLastResult();
-    } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setAddError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '추가 실패');
-    } finally {
-      setAddLoading(false);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    setDeleteError(null);
-    try {
-      await deleteQueueItem(id);
-      setConfirmDeleteId(null);
-      await loadQueue();
-    } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setDeleteError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '삭제 실패');
-    }
-  }
-
-  async function handleReorder(direction: 'up' | 'down') {
-    if (!selectedId || reorderLoading) return;
-    setReorderLoading(true);
-    try {
-      await reorderQueueItem(selectedId, direction);
-      await loadQueue();
-    } catch { /* 경계 조건 등 — 버튼 비활성화로 대부분 방지됨 */ }
-    finally { setReorderLoading(false); }
-  }
-
-  // 자동 실험 설계 변수 목록
-  const varDefs = modelConfig.model_type === 'efficientad' ? EFF_VARS : PC_VARS;
-
-  function buildVariables(): VarValues {
-    const vars: VarValues = {};
-    for (const vd of varDefs) {
-      if (vd.type === 'enum') {
-        const sel = enumSelections[vd.key] ?? [];
-        if (sel.length > 0) vars[vd.key] = sel;
-      } else {
-        const parsed = parseNumList(numInputs[vd.key] ?? '');
-        if (parsed.length > 0) vars[vd.key] = parsed;
+      setSelectedIndex(null);
+    } else {
+      for (let i = 0; i < successCount; i++) {
+        deleteLocalItem(0);
       }
+      setConfirmError(errorMsg);
     }
-    return vars;
+
+    setConfirmLoading(false);
   }
 
-  function updateBatchPreview() {
-    const vars = buildVariables();
-    const combos = generateCombinations(modelConfig.params, vars);
-    setBatchPreview(combos.length);
-  }
-
-  async function handleBatchAdd() {
-    const vars = buildVariables();
-    if (Object.keys(vars).length === 0) {
-      setBatchAddError('변경할 파라미터 값을 하나 이상 선택해 주세요.');
-      return;
-    }
-    const combos = generateCombinations(modelConfig.params, vars);
-    const sid = setId.trim() || undefined;
-
-    setBatchAddLoading(true);
-    setBatchAddError(null);
-    try {
-      for (const params of combos) {
-        await addToQueue(preprocessingConfig, { ...modelConfig, params }, sid);
-      }
-      await loadQueue();
-      clearLastResult();
-      setBatchOpen(false);
-      setEnumSelections({});
-      setNumInputs({});
-      setSetId('');
-      setBatchPreview(null);
-    } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setBatchAddError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '일괄 추가 실패');
-    } finally {
-      setBatchAddLoading(false);
+  function handleConfirmClick() {
+    if (localItems.length === 0) return;
+    if (status === 'idle') {
+      submitQueue();
+    } else {
+      setConfirmModalOpen(true);
     }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold text-slate-800">학습 대기열</h3>
+      {/* 헤더 */}
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-slate-800">
+          학습 대기열
+          <span className="ml-2 text-xs font-normal text-slate-400">({localItems.length}개)</span>
+        </h3>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedIndex === null) return;
+            const newIdx = selectedIndex - 1;
+            reorderLocalItem(selectedIndex, 'up');
+            setSelectedIndex(newIdx);
+            if (newIdx < page * PAGE_SIZE) setPage(page - 1);
+          }}
+          disabled={selectedIndex === null || selectedIndex === 0}
+          className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >▲ 위로</button>
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedIndex === null) return;
+            const newIdx = selectedIndex + 1;
+            reorderLocalItem(selectedIndex, 'down');
+            setSelectedIndex(newIdx);
+            if (newIdx >= (page + 1) * PAGE_SIZE) setPage(page + 1);
+          }}
+          disabled={selectedIndex === null || selectedIndex === localItems.length - 1}
+          className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >▼ 아래로</button>
+        {selectedIndex !== null && (
+          <span className="text-xs text-slate-400">{selectedIndex + 1}번 항목 선택됨</span>
+        )}
+      </div>
 
-      {loadError && <p className="text-xs text-red-600">{loadError}</p>}
-      {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
+      {confirmError && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{confirmError}</p>
+      )}
 
-      {/* 큐 테이블 */}
-      {queue.filter((i) => i.status !== 'completed').length > 0 ? (
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {['#', '실험명', 'Set ID', '상태', ''].map((h) => (
-                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {queue.filter((i) => i.status !== 'completed').map((item, idx) => (
-                <tr
-                  key={item.id}
-                  onClick={() => setSelectedId(prev => prev === item.id ? null : item.id)}
-                  className={`transition-colors cursor-pointer ${selectedId === item.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
-                >
-                  <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
-                  <td className="px-3 py-2 font-mono text-slate-700">{item.name}</td>
-                  <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
-                  <td className={`px-3 py-2 ${STATUS_COLOR[item.status] ?? 'text-slate-500'}`}>
-                    {item.status}
-                  </td>
-                  <td className="px-3 py-2">
-                    {item.status === 'pending' && (
-                      confirmDeleteId === item.id ? (
-                        <span className="flex gap-1.5 items-center">
-                          <button onClick={() => handleDelete(item.id)}
-                            className="text-red-600 hover:underline cursor-pointer text-xs">확인</button>
-                          <button onClick={() => setConfirmDeleteId(null)}
-                            className="text-slate-400 hover:underline cursor-pointer text-xs">취소</button>
-                        </span>
-                      ) : (
-                        <button onClick={() => setConfirmDeleteId(item.id)}
-                          className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors">
-                          삭제
-                        </button>
-                      )
+      {/* 대기열 테이블 */}
+      {localItems.length > 0 ? (
+        <>
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  {/* Row 1: 그룹 헤더 */}
+                  <tr ref={groupHeaderRowRef}>
+                    <th rowSpan={2} className={`sticky left-0 z-30 w-[2.5rem] ${thCls}`}>#</th>
+                    <th rowSpan={2} className={`sticky left-10 z-30 w-[6rem] ${thCls}`}>모델</th>
+                    <th rowSpan={2} className={`sticky left-[136px] z-30 w-[7rem] ${thCls}`}>Set ID</th>
+                    <th
+                      colSpan={commonOpen ? 7 : 1}
+                      className={thGroupCls}
+                      onClick={() => setCommonOpen(!commonOpen)}
+                    >
+                      {commonOpen ? '▾' : '▸'} [공통]
+                    </th>
+                    <th
+                      colSpan={efficientadOpen ? EFF_COL_COUNT : 1}
+                      className={thGroupCls}
+                      onClick={() => setEfficientadOpen(!efficientadOpen)}
+                    >
+                      {efficientadOpen ? '▾' : '▸'} [EfficientAD]
+                    </th>
+                    <th
+                      colSpan={patchcoreOpen ? PC_COL_COUNT : 1}
+                      className={thGroupCls}
+                      onClick={() => setPatchcoreOpen(!patchcoreOpen)}
+                    >
+                      {patchcoreOpen ? '▾' : '▸'} [PatchCore]
+                    </th>
+                    <th rowSpan={2} className={`sticky right-12 z-30 w-[3rem] ${thCls}`}></th>
+                    <th rowSpan={2} className={`sticky right-0 z-30 w-[3rem] ${thCls}`}></th>
+                  </tr>
+
+                  {/* Row 2: 컬럼 헤더 */}
+                  <tr style={{ top: groupHeaderHeight }}>
+                    {commonOpen ? (
+                      <>
+                        <th className={`sticky z-10 ${thCls}`}>전처리</th>
+                        <th className={`sticky z-10 ${thCls}`}>배경분리</th>
+                        <th className={`sticky z-10 ${thCls}`}>이미지크기</th>
+                        <th className={`sticky z-10 ${thCls}`}>배치크기</th>
+                        <th className={`sticky z-10 ${thCls}`}>랜덤시드</th>
+                        <th className={`sticky z-10 ${thCls}`}>Threshold방식</th>
+                        <th className={`sticky z-10 ${thCls}`}>Threshold값</th>
+                      </>
+                    ) : (
+                      <th />
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    {efficientadOpen ? (
+                      <>
+                        <th className={`sticky z-10 ${thCls}`}>모델크기</th>
+                        <th className={`sticky z-10 ${thCls}`}>Train Steps</th>
+                        <th className={`sticky z-10 ${thCls}`}>Optimizer</th>
+                        <th className={`sticky z-10 ${thCls}`}>Scheduler</th>
+                        <th className={`sticky z-10 ${thCls}`}>LR</th>
+                        <th className={`sticky z-10 ${thCls}`}>Weight Decay</th>
+                        <th className={`sticky z-10 ${thCls}`}>Out Channels</th>
+                        <th className={`sticky z-10 ${thCls}`}>Padding</th>
+                        <th className={`sticky z-10 ${thCls}`}>AE Loss Weight</th>
+                        <th className={`sticky z-10 ${thCls}`}>AE LR</th>
+                        <th className={`sticky z-10 ${thCls}`}>AE Weight Decay</th>
+                        <th className={`sticky z-10 ${thCls}`}>LR Decay Steps</th>
+                        <th className={`sticky z-10 ${thCls}`}>LR Decay Factor</th>
+                        <th className={`sticky z-10 ${thCls}`}>ImageNet Penalty</th>
+                        <th className={`sticky z-10 ${thCls}`}>Penalty Batch</th>
+                        <th className={`sticky z-10 ${thCls}`}>Early Stopping</th>
+                        <th className={`sticky z-10 ${thCls}`}>Patience</th>
+                        <th className={`sticky z-10 ${thCls}`}>Min Delta</th>
+                      </>
+                    ) : (
+                      <th />
+                    )}
+                    {patchcoreOpen ? (
+                      <>
+                        <th className={`sticky z-10 ${thCls}`}>백본</th>
+                        <th className={`sticky z-10 ${thCls}`}>Coreset비율</th>
+                        <th className={`sticky z-10 ${thCls}`}>커널크기</th>
+                        <th className={`sticky z-10 ${thCls}`}>Max Train</th>
+                        <th className={`sticky z-10 ${thCls}`}>kNN</th>
+                        <th className={`sticky z-10 ${thCls}`}>Top-k비율</th>
+                      </>
+                    ) : (
+                      <th />
+                    )}
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {localItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((item, localIdx) => {
+                    const globalIdx = page * PAGE_SIZE + localIdx;
+                    const pre = item.preprocessing_config;
+                    const mc = item.model_config;
+                    const isSelected = selectedIndex === globalIdx;
+                    const stickyBg = isSelected ? 'bg-sky-50' : 'bg-white group-hover:bg-slate-50';
+
+                    return (
+                      <tr
+                        key={globalIdx}
+                        className={`group transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                      >
+                        {/* 고정 열 */}
+                        <td className={`sticky left-0 z-[1] w-[2.5rem] px-2 py-2 text-slate-400 ${stickyBg}`}>
+                          <span className="truncate block">{globalIdx + 1}</span>
+                        </td>
+                        <td className={`sticky left-10 z-[1] w-[6rem] px-2 py-2 font-mono text-slate-700 ${stickyBg}`}>
+                          <span className="truncate block">{mc.model_type}</span>
+                        </td>
+                        <td className={`sticky left-[136px] z-[1] w-[7rem] px-2 py-2 text-slate-500 ${stickyBg}`}>
+                          <span className="truncate block">{item.set_id ?? '—'}</span>
+                        </td>
+
+                        {/* 공통 그룹 */}
+                        {commonOpen ? (
+                          <>
+                            <td className={tdCls}>{pre.method}</td>
+                            <td className={tdCls}>{pre.background_method}</td>
+                            <td className={tdCls}>{pre.image_size}</td>
+                            <td className={tdCls}>{mc.batch_size}</td>
+                            <td className={tdCls}>{mc.random_seed}</td>
+                            <td className={tdCls}>{mc.threshold_method}</td>
+                            <td className={tdCls}>{mc.threshold_value}</td>
+                          </>
+                        ) : (
+                          <td />
+                        )}
+
+                        {/* EfficientAD 그룹 */}
+                        {efficientadOpen ? (
+                          mc.model_type === 'efficientad' ? (
+                            <>
+                              <td className={tdCls}>{mc.params.model_size}</td>
+                              <td className={tdCls}>{mc.params.train_steps.toLocaleString()}</td>
+                              <td className={tdCls}>{mc.params.optimizer}</td>
+                              <td className={tdCls}>{mc.params.scheduler}</td>
+                              <td className={tdCls}>{mc.params.learning_rate.toExponential(2)}</td>
+                              <td className={tdCls}>{mc.params.weight_decay.toExponential(2)}</td>
+                              <td className={tdCls}>{mc.params.out_channels}</td>
+                              <td className={tdCls}>{String(mc.params.padding)}</td>
+                              <td className={tdCls}>{mc.params.ae_loss_weight}</td>
+                              <td className={tdCls}>{mc.params.autoencoder_lr.toExponential(2)}</td>
+                              <td className={tdCls}>{mc.params.autoencoder_weight_decay.toExponential(2)}</td>
+                              <td className={tdCls}>{mc.params.lr_decay_epochs.toLocaleString()}</td>
+                              <td className={tdCls}>{mc.params.lr_decay_factor}</td>
+                              <td className={tdCls}>{String(mc.params.use_imagenet_penalty)}</td>
+                              <td className={tdCls}>
+                                {mc.params.use_imagenet_penalty ? String(mc.params.penalty_batch_size) : '—'}
+                              </td>
+                              <td className={tdCls}>{String(mc.params.early_stopping)}</td>
+                              <td className={tdCls}>
+                                {mc.params.early_stopping ? String(mc.params.patience) : '—'}
+                              </td>
+                              <td className={tdCls}>
+                                {mc.params.early_stopping ? String(mc.params.min_delta) : '—'}
+                              </td>
+                            </>
+                          ) : (
+                            <>{Array.from({ length: EFF_COL_COUNT }, (_, i) => (
+                              <td key={i} className={tdDashCls}>—</td>
+                            ))}</>
+                          )
+                        ) : (
+                          <td />
+                        )}
+
+                        {/* PatchCore 그룹 */}
+                        {patchcoreOpen ? (
+                          mc.model_type === 'patchcore' ? (
+                            <>
+                              <td className={tdCls}>{mc.params.backbone}</td>
+                              <td className={tdCls}>{mc.params.coreset_sampling_ratio}</td>
+                              <td className={tdCls}>{mc.params.neighbourhood_kernel_size}</td>
+                              <td className={tdCls}>{mc.params.max_train}</td>
+                              <td className={tdCls}>{mc.params.knn}</td>
+                              <td className={tdCls}>{mc.params.top_k_ratio}</td>
+                            </>
+                          ) : (
+                            <>{Array.from({ length: PC_COL_COUNT }, (_, i) => (
+                              <td key={i} className={tdDashCls}>—</td>
+                            ))}</>
+                          )
+                        ) : (
+                          <td />
+                        )}
+
+                        {/* 상세 버튼 열 */}
+                        <td
+                          className={`sticky right-12 z-[1] px-2 py-2 ${stickyBg}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedIndex((prev) => (prev === globalIdx ? null : globalIdx))}
+                            className={`text-xs transition-colors cursor-pointer ${isSelected ? 'text-sky-600 font-medium' : 'text-slate-400 hover:text-sky-500'}`}
+                          >상세</button>
+                        </td>
+
+                        {/* 삭제 열 (확인 없이 즉시 삭제) */}
+                        <td
+                          className={`sticky right-0 z-[1] px-2 py-2 ${stickyBg}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteLocalItem(globalIdx);
+                              if (selectedIndex === globalIdx) setSelectedIndex(null);
+                              else if (selectedIndex !== null && selectedIndex > globalIdx)
+                                setSelectedIndex(selectedIndex - 1);
+                              const newLen = localItems.length - 1;
+                              const newTotal = Math.ceil(newLen / PAGE_SIZE);
+                              if (newTotal > 0 && page >= newTotal) setPage(newTotal - 1);
+                            }}
+                            className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors text-xs"
+                          >삭제</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 페이지네이션 */}
+          {localItems.length > PAGE_SIZE && (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >이전</button>
+              <span className="text-xs text-slate-500">
+                {page + 1} / {Math.ceil(localItems.length / PAGE_SIZE)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(Math.ceil(localItems.length / PAGE_SIZE) - 1, p + 1))}
+                disabled={page >= Math.ceil(localItems.length / PAGE_SIZE) - 1}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >다음</button>
+            </div>
+          )}
+
+          {/* 확정 버튼 */}
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={handleConfirmClick}
+              disabled={confirmLoading}
+              className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+            >
+              {confirmLoading ? '확정 중...' : '확정'}
+            </button>
+          </div>
+        </>
       ) : (
         <p className="text-xs text-slate-400">대기 중인 항목이 없습니다.</p>
       )}
 
-      {/* 순서 변경 버튼 — pending 항목 선택 시에만 표시 */}
-      {(() => {
-        if (!selectedId) return null;
-        const sel = queue.find(i => i.id === selectedId);
-        if (!sel || sel.status !== 'pending') return null;
-        const pendingItems = queue.filter(i => i.status === 'pending');
-        const pendingIdx = pendingItems.findIndex(i => i.id === selectedId);
-        return (
-          <div className="flex gap-2 items-center">
-            <span className="text-xs text-slate-500">순서 변경:</span>
-            <button type="button" onClick={() => handleReorder('up')}
-              disabled={pendingIdx <= 0 || reorderLoading}
-              className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              title="위로 이동">▲</button>
-            <button type="button" onClick={() => handleReorder('down')}
-              disabled={pendingIdx >= pendingItems.length - 1 || reorderLoading}
-              className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              title="아래로 이동">▼</button>
-            {reorderLoading && <span className="text-xs text-slate-400">이동 중...</span>}
-          </div>
-        );
-      })()}
-
       {/* 선택 항목 상세 패널 */}
-      {selectedId && (() => {
-        const item = queue.find(i => i.id === selectedId);
-        if (!item) return null;
-        return (
-          <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-sky-800">{item.name} 상세 설정</span>
-              <button
-                onClick={() => setSelectedId(null)}
-                className="text-xs text-sky-400 hover:text-sky-700 cursor-pointer"
-              >✕</button>
-            </div>
-            <pre className="text-[11px] text-slate-700 bg-white border border-sky-100 rounded-lg p-3 overflow-auto max-h-64 leading-5">
-              {JSON.stringify({ preprocessing: item.preprocessing_config, model: item.model_config }, null, 2)}
-            </pre>
+      {selectedIndex !== null && localItems[selectedIndex] && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-sky-800">항목 {selectedIndex + 1} 상세 설정</span>
+            <button
+              type="button"
+              onClick={() => setSelectedIndex(null)}
+              className="text-xs text-sky-400 hover:text-sky-700 cursor-pointer"
+            >✕</button>
           </div>
-        );
-      })()}
-
-      {/* 현재 설정 추가 */}
-      <div className="flex gap-2 items-center">
-        <button type="button" onClick={handleAdd} disabled={addLoading}
-          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer">
-          {addLoading ? '추가 중...' : '+ 현재 설정 큐에 추가'}
-        </button>
-      </div>
-      {addError && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addError}</p>
+          <pre className="text-[11px] text-slate-700 bg-white border border-sky-100 rounded-lg p-3 overflow-auto max-h-64 leading-5">
+            {JSON.stringify(
+              {
+                preprocessing: localItems[selectedIndex].preprocessing_config,
+                model: localItems[selectedIndex].model_config,
+              },
+              null,
+              2,
+            )}
+          </pre>
+        </div>
       )}
 
-      {/* 자동 실험 설계 */}
-      <div>
-        <button type="button"
-          onClick={() => setBatchOpen((o) => !o)}
-          className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors cursor-pointer">
-          <span>{batchOpen ? '▾' : '▸'}</span>
-          자동 실험 설계 (카르테시안 곱)
-        </button>
-
-        {batchOpen && (
-          <div className="mt-3 flex flex-col gap-3 pl-3 border-l-2 border-slate-100">
-            <p className="text-xs text-slate-500">
-              변경할 파라미터 값을 선택하면 모든 조합이 큐에 추가됩니다.
-            </p>
-
-            {varDefs.map((vd) => (
-              <div key={vd.key} className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-slate-500">{vd.label}</label>
-                {vd.type === 'enum' ? (
-                  <div className="flex gap-3 flex-wrap">
-                    {vd.options.map((opt) => {
-                      const sel = enumSelections[vd.key] ?? [];
-                      const checked = sel.includes(opt);
-                      return (
-                        <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                          <input type="checkbox" checked={checked}
-                            onChange={() => {
-                              const next = checked ? sel.filter((s) => s !== opt) : [...sel, opt];
-                              setEnumSelections((prev) => ({ ...prev, [vd.key]: next }));
-                              setBatchPreview(null);
-                            }}
-                            className="cursor-pointer accent-sky-600" />
-                          <span className="text-slate-700">{opt}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <input type="text"
-                    value={numInputs[vd.key] ?? ''}
-                    placeholder={'hint' in vd ? vd.hint : ''}
-                    onChange={(e) => {
-                      setNumInputs((prev) => ({ ...prev, [vd.key]: e.target.value }));
-                      setBatchPreview(null);
-                    }}
-                    className={inputCls} />
-                )}
-              </div>
-            ))}
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-500">Set ID</label>
-              <input type="text" value={setId}
-                onChange={(e) => setSetId(e.target.value)}
-                placeholder="예: batch_001 (Tab4 그룹 비교용)"
-                className={inputCls} />
-            </div>
-
-            <div className="flex gap-2 items-center flex-wrap">
-              <button type="button" onClick={updateBatchPreview}
-                className="px-3 py-1.5 border border-slate-200 text-xs text-slate-600 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
-                조합 미리보기
-              </button>
-              {batchPreview !== null && (
-                <span className="text-xs text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
-                  → {batchPreview}개 조합
-                </span>
-              )}
-              <button type="button" onClick={handleBatchAdd} disabled={batchAddLoading}
-                className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer">
-                {batchAddLoading ? '추가 중...' : '큐에 전부 추가'}
-              </button>
-            </div>
-            {batchAddError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {batchAddError}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+      {confirmModalOpen && (
+        <ConfirmModal
+          message="진행 중인 학습이 있습니다. 확정하시겠습니까?"
+          confirmLabel="확정"
+          cancelLabel="취소"
+          onConfirm={submitQueue}
+          onCancel={() => setConfirmModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

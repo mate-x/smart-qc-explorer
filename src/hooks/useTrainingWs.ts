@@ -77,20 +77,25 @@ function dispatch(msg: WsMessage) {
 
     case 'completed':
       s.setCompleted(msg.exp_id, msg.auc, msg.duration_seconds, msg.message, msg.early_stopped);
+      if (s.batch_mode) s.incBatchDone();
       s.bumpQueueSignal();
       break;
 
     case 'stopped':
       s.setStopped();
+      s.bumpQueueSignal();
       break;
 
     case 'error':
       s.setWsError(msg.message);
       s.setStatus('idle');
+      s.bumpQueueSignal();
       break;
 
     case 'batch_item_started':
+      s.clearRunData();
       s.setStatus('running');
+      s.setCurrentModelType(msg.model_type ?? null);
       s.bumpQueueSignal();
       break;
 

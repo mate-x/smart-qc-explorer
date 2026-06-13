@@ -6,6 +6,7 @@ export interface AnomalyImage {
   gt_match: boolean;
   classification: string;
   image_path: string;
+  has_gt_mask: boolean;
 }
 
 export interface AnomalyMapImagesResponse {
