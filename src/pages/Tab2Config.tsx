@@ -108,6 +108,8 @@ export default function Tab2Config() {
     );
   }
 
+  const accordionBtn = 'w-full flex items-center gap-2 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer';
+
   return (
     <div className="flex flex-col gap-4">
       {/* 상단 바: 디바이스 정보만 */}

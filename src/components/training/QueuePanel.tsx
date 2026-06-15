@@ -17,7 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  running: 'text-sky-600 font-semibold',
+  running:   'text-sky-600 font-semibold',
   completed: 'text-emerald-600',
   failed: 'text-red-500',
   skipped: 'text-slate-400',
@@ -130,6 +130,19 @@ export default function QueuePanel() {
       await stopBatchTraining();
     } catch (e: unknown) {
       setBatchError((e as { message?: string })?.message ?? '중단 실패');
+    }
+  }
+
+  // #01: 대기열 항목 삭제 (running 제외)
+  async function handleDelete(id: string) {
+    setDeleteError(null);
+    try {
+      await deleteQueueItem(id);
+      setConfirmDeleteId(null);
+      await loadQueue();
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setDeleteError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '삭제 실패');
     }
   }
 

@@ -45,6 +45,9 @@ export const addToQueue = (
 export const deleteQueueItem = (itemId: string) =>
   apiClient.delete<{ success: boolean }>(`/api/queue/${itemId}`);
 
+export const clearQueue = () =>
+  apiClient.delete<{ deleted: number }>('/api/queue');
+
 export const reorderQueueItem = (itemId: string, direction: 'up' | 'down') =>
   apiClient.patch<{ success: boolean }>('/api/queue/reorder', { item_id: itemId, direction });
 

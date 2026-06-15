@@ -25,6 +25,64 @@ const thCls = 'px-3 py-2 text-left text-xs font-semibold text-slate-500 whitespa
 const thGroupCls = `${thCls} cursor-pointer select-none hover:bg-slate-100 transition-colors border-l border-slate-200`;
 const thSortCls = `${thCls} cursor-pointer select-none hover:text-slate-700`;
 
+// ---------- 헬퍼 함수 ----------
+
+function computeTrainedThreshold(exp: Experiment): number | null {
+  const scores = exp.metrics?.anomaly_scores;
+  const labels = exp.metrics?.image_labels;
+  if (!scores?.length || !labels?.length) return null;
+
+  const method = exp.threshold_method ?? 'percentile';
+  const value  = exp.threshold_value  ?? 95.0;
+
+  if (method === 'absolute') return value;
+
+  const normalScores = scores
+    .filter((_, i) => labels[i] === 0)
+    .sort((a, b) => a - b);
+  if (normalScores.length === 0) return value;
+
+  const idx = (value / 100) * (normalScores.length - 1);
+  const lo  = Math.floor(idx);
+  const hi  = Math.ceil(idx);
+  if (lo === hi) return normalScores[lo];
+  return normalScores[lo] + (idx - lo) * (normalScores[hi] - normalScores[lo]);
+}
+
+function recomputeMetrics(
+  scores: number[],
+  labels: number[],
+  threshold: number,
+  orig: ExperimentMetrics,
+): ExperimentMetrics {
+  let tp = 0, fp = 0, tn = 0, fn = 0;
+  const n = Math.min(scores.length, labels.length);
+  for (let i = 0; i < n; i++) {
+    const pred = scores[i] >= threshold ? 1 : 0;
+    if (pred === 1 && labels[i] === 1) tp++;
+    else if (pred === 1 && labels[i] === 0) fp++;
+    else if (pred === 0 && labels[i] === 0) tn++;
+    else fn++;
+  }
+  const total     = tp + fp + tn + fn;
+  const accuracy  = total > 0 ? (tp + tn) / total : 0;
+  const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+  const recall    = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+  const f1  = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0;
+  const f2  = (4 * precision + recall) > 0 ? 5 * precision * recall / (4 * precision + recall) : 0;
+  return {
+    ...orig,
+    accuracy,
+    precision,
+    recall,
+    f1_score: f1,
+    f2_score: f2,
+    confusion_matrix: { tp, fp, tn, fn },
+  };
+}
+
+// ---------- 컴포넌트 ----------
+
 export default function Tab4Experiments() {
   const navigate = useNavigate();
   const { selectedExperimentId, setSelectedExperimentId } = useExperimentsStore();
@@ -39,7 +97,10 @@ export default function Tab4Experiments() {
   const [exportMap, setExportMap] = useState<Map<string, ExportEntry>>(new Map());
   const [exportFormat, setExportFormat] = useState<'onnx' | 'openvino' | 'trt'>('onnx');
 
-  const selected = experiments.find(e => e.experiment_id === selectedExperimentId) ?? null;
+  // Threshold 조정 상태
+  const [adjustedThreshold, setAdjustedThreshold] = useState<number | null>(null);
+
+  const selected  = experiments.find(e => e.experiment_id === selectedExperimentId) ?? null;
   const completed = experiments.filter(e => e.status === 'completed');
 
   const [buildStatus, setBuildStatus] = useState<AnomalyMapStatus | null>(null);
@@ -368,7 +429,7 @@ export default function Tab4Experiments() {
       </div>
 
       {/* 상세 결과 */}
-      {selected?.status === 'completed' && selected.metrics && (
+      {selected?.status === 'completed' && selected.metrics && adjustedMetrics && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-6">
           <h3 className="text-sm font-semibold text-slate-800">상세 결과 — {selected.name}</h3>
 
