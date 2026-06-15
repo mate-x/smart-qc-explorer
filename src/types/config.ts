@@ -41,6 +41,7 @@ export interface QueueItem {
   model_config: ModelConfig;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   set_id?: string | null;
+  duration_seconds?: number | null;
 }
 
 export interface ThresholdPreviewResponse {

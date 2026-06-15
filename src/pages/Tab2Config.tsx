@@ -6,6 +6,7 @@ import { useDatasetStore } from '../store/datasetStore';
 import PreprocessingForm from '../components/config/PreprocessingForm';
 import ModelConfigForm from '../components/config/ModelConfigForm';
 import QueueSection from '../components/config/QueueSection';
+import AutoExperimentSection from '../components/config/AutoExperimentSection';
 import { DEFAULT_EFFICIENTAD } from '../components/config/EfficientAdParams';
 
 const DEFAULT_PRE: PreprocessingConfig = {
@@ -41,7 +42,10 @@ export default function Tab2Config() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
+  const [singleOpen, setSingleOpen] = useState(true);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(false);
+  const [queueRefreshTrigger, setQueueRefreshTrigger] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -105,58 +109,85 @@ export default function Tab2Config() {
     );
   }
 
+  const accordionBtn = 'w-full flex items-center gap-2 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer';
+
   return (
     <div className="flex flex-col gap-4">
-      {/* 상단 바: 디바이스 + 저장 */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3 flex items-center gap-4">
-        {deviceLabel && (
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${isGpu ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-            <span className="text-xs font-medium text-slate-600">{deviceLabel}</span>
+      {/* 디바이스 정보 */}
+      {deviceLabel && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3 flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${isGpu ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+          <span className="text-xs font-medium text-slate-600">{deviceLabel}</span>
+        </div>
+      )}
+
+      {/* 1. 단일 실험 설계 */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <button type="button" onClick={() => setSingleOpen(o => !o)} className={accordionBtn}>
+          <span className="text-slate-400 text-xs">{singleOpen ? '▾' : '▸'}</span>
+          단일 실험 설계
+        </button>
+        {singleOpen && (
+          <div className="px-5 pb-5 border-t border-slate-100">
+            <div className="pt-4 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border border-slate-200 rounded-xl p-5">
+                  <PreprocessingForm value={preConfig} onChange={setPreConfig} datasetPath={datasetPath} />
+                </div>
+                <div className="border border-slate-200 rounded-xl p-5">
+                  <ModelConfigForm value={modelConfig} onChange={setModelConfig} />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 justify-end">
+                {saveOk && (
+                  <span className="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                    저장 완료
+                  </span>
+                )}
+                {saveError && <span className="text-xs text-red-600">{saveError}</span>}
+                <button onClick={handleSave} disabled={saveLoading}
+                  className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer whitespace-nowrap">
+                  {saveLoading ? '저장 중...' : '설정 저장'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
-        <div className="flex-1" />
-        {saveOk && (
-          <span className="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-            저장 완료
-          </span>
-        )}
-        {saveError && (
-          <span className="text-xs text-red-600">{saveError}</span>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={saveLoading}
-          className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer whitespace-nowrap"
-        >
-          {saveLoading ? '저장 중...' : '설정 저장'}
-        </button>
       </div>
 
-      {/* 2열: 전처리 | 모델 */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <PreprocessingForm value={preConfig} onChange={setPreConfig} datasetPath={datasetPath} />
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <ModelConfigForm value={modelConfig} onChange={setModelConfig} />
-        </div>
-      </div>
-
-      {/* 학습 대기열 (아코디언) */}
+      {/* 2. 학습 대기열 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setQueueOpen(o => !o)}
-          className="w-full flex items-center gap-2 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer"
-        >
+        <button type="button" onClick={() => setQueueOpen(o => !o)} className={accordionBtn}>
           <span className="text-slate-400 text-xs">{queueOpen ? '▾' : '▸'}</span>
-          학습 대기열 관리
+          학습 대기열
         </button>
         {queueOpen && (
           <div className="px-5 pb-5 border-t border-slate-100">
             <div className="pt-4">
-              <QueueSection preprocessingConfig={preConfig} modelConfig={modelConfig} />
+              <QueueSection
+                preprocessingConfig={preConfig}
+                modelConfig={modelConfig}
+                refreshTrigger={queueRefreshTrigger}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. 자동 실험 설계 */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <button type="button" onClick={() => setAutoOpen(o => !o)} className={accordionBtn}>
+          <span className="text-slate-400 text-xs">{autoOpen ? '▾' : '▸'}</span>
+          자동 실험 설계 (멀티 셀렉트)
+        </button>
+        {autoOpen && (
+          <div className="px-5 pb-5 border-t border-slate-100">
+            <div className="pt-4">
+              <AutoExperimentSection
+                preprocessingConfig={preConfig}
+                modelConfig={modelConfig}
+                onQueueChanged={() => setQueueRefreshTrigger(n => n + 1)}
+              />
             </div>
           </div>
         )}

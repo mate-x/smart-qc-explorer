@@ -66,6 +66,7 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
                 key={img.image_path}
                 img={img}
                 expId={expId}
+                threshold={threshold}
                 isSelected={selectedImage?.image_path === img.image_path}
                 onClick={() => handleCardClick(img)}
               />
@@ -114,11 +115,12 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
 interface CardProps {
   img: AnomalyImage;
   expId: string;
+  threshold: number;
   isSelected: boolean;
   onClick: () => void;
 }
 
-function ImageCard({ img, expId, isSelected, onClick }: CardProps) {
+function ImageCard({ img, expId, threshold, isSelected, onClick }: CardProps) {
   const badgeClass = CLS_BADGE[img.classification] ?? 'bg-gray-100 text-gray-700 border-gray-300';
   return (
     <div
@@ -129,7 +131,7 @@ function ImageCard({ img, expId, isSelected, onClick }: CardProps) {
     >
       <div className="bg-gray-100 flex items-center justify-center min-h-20">
         <img
-          src={getTripletImageUrl(expId, img.image_path)}
+          src={getTripletImageUrl(expId, img.image_path, threshold)}
           alt={img.image_name}
           className="w-full object-contain"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
@@ -172,7 +174,7 @@ function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
   async function handleDownload() {
     setDownloading(true);
     try {
-      const res = await fetch(getTripletImageUrl(expId, img.image_path));
+      const res = await fetch(getTripletImageUrl(expId, img.image_path, threshold));
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');

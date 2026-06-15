@@ -1,25 +1,39 @@
 import { useState, useEffect } from 'react';
 import { useTrainingStore } from '../../store/trainingStore';
 import { useConfigStore } from '../../store/configStore';
-import { getQueue } from '../../api/configApi';
+import { getQueue, deleteQueueItem } from '../../api/configApi';
 import type { QueueItem } from '../../types/config';
 import { startBatchTraining, stopBatchTraining, skipBatchItem } from '../../api/trainingApi';
 
 const STATUS_LABEL: Record<string, string> = {
-  대기중: '대기',
-  running: '실행 중',
+  pending:   '대기',
+  대기중:    '대기',
+  running:   '실행 중',
   completed: '완료',
-  failed: '실패',
-  skipped: '건너뜀',
+  failed:    '실패',
+  skipped:   '건너뜀',
+  stopped:   '중단',
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  running: 'text-sky-600 font-semibold',
+  running:   'text-sky-600 font-semibold',
   completed: 'text-emerald-600',
-  failed: 'text-red-500',
-  skipped: 'text-slate-400',
-  대기중: 'text-slate-500',
+  failed:    'text-red-500',
+  skipped:   'text-slate-400',
+  stopped:   'text-slate-400',
+  pending:   'text-slate-500',
+  대기중:    'text-slate-500',
 };
+
+function fmtDuration(secs: number | null | undefined): string {
+  if (secs == null) return '';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  if (h > 0) return `${h}시간 ${m}분 ${s}초`;
+  if (m > 0) return `${m}분 ${s}초`;
+  return `${s}초`;
+}
 
 export default function QueuePanel() {
   const { status, batch_mode, batch_total, batch_done, batch_queue_signal } = useTrainingStore();
@@ -31,6 +45,8 @@ export default function QueuePanel() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchPending, setBatchPending] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function loadQueue() {
     try {
@@ -45,12 +61,18 @@ export default function QueuePanel() {
   useEffect(() => { loadQueue(); }, [batch_queue_signal]);
 
   const isRunning = status === 'running' || status === 'paused';
-  const visibleQueue = queue.filter((item) => item.status !== 'completed');
+
+  // #02: 배치 중에는 완료된 항목도 숨기지 않음
+  const visibleQueue = batch_mode
+    ? queue
+    : queue.filter((item) => item.status !== 'completed');
+
   const pendingCount = queue.filter((item) => item.status === 'pending').length;
 
   useEffect(() => {
     if (isRunning) setBatchPending(false);
   }, [isRunning]);
+
   if (visibleQueue.length === 0 && !batch_mode) return null;
 
   async function handleBatchStart() {
@@ -75,6 +97,19 @@ export default function QueuePanel() {
     setBatchError(null);
     try { await stopBatchTraining(); }
     catch (e: unknown) { setBatchError((e as { message?: string })?.message ?? '중단 실패'); }
+  }
+
+  // #01: 대기열 항목 삭제 (running 제외)
+  async function handleDelete(id: string) {
+    setDeleteError(null);
+    try {
+      await deleteQueueItem(id);
+      setConfirmDeleteId(null);
+      await loadQueue();
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setDeleteError(typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '삭제 실패');
+    }
   }
 
   return (
@@ -125,32 +160,61 @@ export default function QueuePanel() {
 
       {loadError && <p className="text-xs text-red-600">{loadError}</p>}
       {batchError && <p className="text-xs text-red-600">{batchError}</p>}
+      {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
 
       {visibleQueue.length > 0 ? (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {['#', '실험명', 'Set ID', '상태'].map((h) => (
-                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {visibleQueue.map((item, idx) => (
-                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
-                  <td className="px-3 py-2 font-mono text-slate-700">{item.name}</td>
-                  <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
-                  <td className={`px-3 py-2 ${STATUS_STYLE[item.status] ?? 'text-slate-500'}`}>
-                    {STATUS_LABEL[item.status] ?? item.status}
-                  </td>
+          <div className="overflow-y-auto max-h-[260px]">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  {['#', '실험명', 'Set ID', '상태', '소요시간', ''].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleQueue.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
+                    <td className="px-3 py-2 font-mono text-slate-700">{item.name}</td>
+                    <td className="px-3 py-2 text-slate-500">{item.set_id ?? '—'}</td>
+                    <td className={`px-3 py-2 ${STATUS_STYLE[item.status] ?? 'text-slate-500'}`}>
+                      {STATUS_LABEL[item.status] ?? item.status}
+                    </td>
+                    {/* #03: 소요시간 */}
+                    <td className="px-3 py-2 text-slate-400">
+                      {item.status === 'completed' ? fmtDuration(item.duration_seconds) : '—'}
+                    </td>
+                    {/* #01: 삭제 버튼 (실행 중 제외) */}
+                    <td className="px-3 py-2">
+                      {item.status !== 'running' && (
+                        confirmDeleteId === item.id ? (
+                          <span className="flex gap-1.5 items-center">
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="text-red-600 hover:underline cursor-pointer text-xs"
+                            >확인</button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-slate-400 hover:underline cursor-pointer text-xs"
+                            >취소</button>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(item.id)}
+                            className="text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
+                          >삭제</button>
+                        )
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <p className="text-xs text-slate-400">대기 중인 항목이 없습니다.</p>

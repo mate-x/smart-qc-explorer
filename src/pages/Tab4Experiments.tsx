@@ -1,14 +1,72 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getExperiments, deleteExperiment, saveExperiment } from '../api/experimentsApi';
 import { useExperimentsStore } from '../store/experimentsStore';
-import type { Experiment } from '../types/experiments';
+import type { Experiment, ExperimentMetrics } from '../types/experiments';
 import { paramSummary, fmt } from '../components/tab4/experimentUtils';
 import ConfusionMatrixChart from '../components/tab4/ConfusionMatrixChart';
 import RocCurveChart from '../components/tab4/RocCurveChart';
 import ScoreDistChart from '../components/tab4/ScoreDistChart';
 import ComparisonSection from '../components/tab4/ComparisonSection';
 import BatchComparisonSection from '../components/tab4/BatchComparisonSection';
+
+// ---------- 헬퍼 함수 ----------
+
+function computeTrainedThreshold(exp: Experiment): number | null {
+  const scores = exp.metrics?.anomaly_scores;
+  const labels = exp.metrics?.image_labels;
+  if (!scores?.length || !labels?.length) return null;
+
+  const method = exp.threshold_method ?? 'percentile';
+  const value  = exp.threshold_value  ?? 95.0;
+
+  if (method === 'absolute') return value;
+
+  const normalScores = scores
+    .filter((_, i) => labels[i] === 0)
+    .sort((a, b) => a - b);
+  if (normalScores.length === 0) return value;
+
+  const idx = (value / 100) * (normalScores.length - 1);
+  const lo  = Math.floor(idx);
+  const hi  = Math.ceil(idx);
+  if (lo === hi) return normalScores[lo];
+  return normalScores[lo] + (idx - lo) * (normalScores[hi] - normalScores[lo]);
+}
+
+function recomputeMetrics(
+  scores: number[],
+  labels: number[],
+  threshold: number,
+  orig: ExperimentMetrics,
+): ExperimentMetrics {
+  let tp = 0, fp = 0, tn = 0, fn = 0;
+  const n = Math.min(scores.length, labels.length);
+  for (let i = 0; i < n; i++) {
+    const pred = scores[i] >= threshold ? 1 : 0;
+    if (pred === 1 && labels[i] === 1) tp++;
+    else if (pred === 1 && labels[i] === 0) fp++;
+    else if (pred === 0 && labels[i] === 0) tn++;
+    else fn++;
+  }
+  const total     = tp + fp + tn + fn;
+  const accuracy  = total > 0 ? (tp + tn) / total : 0;
+  const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+  const recall    = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+  const f1  = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0;
+  const f2  = (4 * precision + recall) > 0 ? 5 * precision * recall / (4 * precision + recall) : 0;
+  return {
+    ...orig,
+    accuracy,
+    precision,
+    recall,
+    f1_score: f1,
+    f2_score: f2,
+    confusion_matrix: { tp, fp, tn, fn },
+  };
+}
+
+// ---------- 컴포넌트 ----------
 
 export default function Tab4Experiments() {
   const navigate = useNavigate();
@@ -23,7 +81,10 @@ export default function Tab4Experiments() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const selected = experiments.find(e => e.experiment_id === selectedExperimentId) ?? null;
+  // Threshold 조정 상태
+  const [adjustedThreshold, setAdjustedThreshold] = useState<number | null>(null);
+
+  const selected  = experiments.find(e => e.experiment_id === selectedExperimentId) ?? null;
   const completed = experiments.filter(e => e.status === 'completed');
 
   const load = useCallback(async () => {
@@ -40,6 +101,11 @@ export default function Tab4Experiments() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // 실험 변경 시 threshold 초기화
+  useEffect(() => {
+    setAdjustedThreshold(null);
+  }, [selectedExperimentId]);
 
   async function handleDelete() {
     if (!selected) return;
@@ -76,6 +142,40 @@ export default function Tab4Experiments() {
     else if (selected) setSavePath(`./models/${selected.experiment_id}/`);
     setSaveResult(null);
   }, [selected?.experiment_id]);
+
+  // ---------- Threshold 파생값 ----------
+
+  const initialThreshold = useMemo(
+    () => (selected ? computeTrainedThreshold(selected) : null),
+    [selected?.experiment_id],
+  );
+
+  const effectiveThreshold = adjustedThreshold ?? initialThreshold;
+
+  const scoreMin = useMemo(() => {
+    const s = selected?.metrics?.anomaly_scores;
+    return s?.length ? Math.min(...s) : 0;
+  }, [selected?.experiment_id]);
+
+  const scoreMax = useMemo(() => {
+    const s = selected?.metrics?.anomaly_scores;
+    return s?.length ? Math.max(...s) : 1;
+  }, [selected?.experiment_id]);
+
+  const adjustedMetrics = useMemo<ExperimentMetrics | null>(() => {
+    if (!selected?.metrics || effectiveThreshold == null) return selected?.metrics ?? null;
+    const scores = selected.metrics.anomaly_scores;
+    const labels = selected.metrics.image_labels;
+    if (!scores?.length || !labels?.length) return selected.metrics;
+    return recomputeMetrics(scores, labels, effectiveThreshold, selected.metrics);
+  }, [selected?.experiment_id, effectiveThreshold]);
+
+  const isThresholdModified =
+    adjustedThreshold !== null &&
+    initialThreshold !== null &&
+    Math.abs(adjustedThreshold - initialThreshold) > 1e-9;
+
+  // ---------- 렌더링 ----------
 
   if (loading) {
     return (
@@ -117,10 +217,10 @@ export default function Tab4Experiments() {
             )}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[300px]">
           <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50">
+              <tr className="border-b border-slate-200">
                 {['실험명', '제품', '모델', '파라미터', 'Accuracy', 'Precision', 'Recall', 'F1', 'F2', 'AUC', '실행 시각', '상태'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
                     {h}
@@ -169,30 +269,89 @@ export default function Tab4Experiments() {
       </div>
 
       {/* 상세 결과 */}
-      {selected?.status === 'completed' && selected.metrics && (
+      {selected?.status === 'completed' && selected.metrics && adjustedMetrics && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-6">
           <h3 className="text-sm font-semibold text-slate-800">상세 결과 — {selected.name}</h3>
 
-          {/* 지표 카드 */}
-          <div className="grid grid-cols-4 gap-4">
-            {([
-              { label: 'Accuracy', value: selected.metrics.accuracy },
-              { label: 'Precision', value: selected.metrics.precision },
-              { label: 'Recall', value: selected.metrics.recall },
-              { label: 'F1 Score', value: selected.metrics.f1_score },
-            ] as const).map(({ label, value }) => (
-              <div key={label} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
-                <p className="text-2xl font-bold text-slate-900">{value != null ? value.toFixed(4) : '—'}</p>
+          {/* Threshold 조정 슬라이더 */}
+          {initialThreshold !== null && (selected.metrics.anomaly_scores?.length ?? 0) > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">Threshold 조정</span>
+                <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <span>
+                    학습 시: <span className="font-mono text-slate-700">{initialThreshold.toFixed(4)}</span>
+                    <span className="ml-1 text-slate-400">
+                      ({selected.threshold_method === 'absolute'
+                        ? '절대값'
+                        : `${selected.threshold_value ?? 95}%ile`})
+                    </span>
+                  </span>
+                  {isThresholdModified && (
+                    <button
+                      onClick={() => setAdjustedThreshold(null)}
+                      className="text-sky-600 hover:underline cursor-pointer"
+                    >
+                      초기화
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-mono text-slate-400 w-16">{scoreMin.toFixed(4)}</span>
+                <input
+                  type="range"
+                  min={scoreMin}
+                  max={scoreMax}
+                  step={(scoreMax - scoreMin) / 10000 || 0.0001}
+                  value={effectiveThreshold ?? initialThreshold}
+                  onChange={e => setAdjustedThreshold(parseFloat(e.target.value))}
+                  className="flex-1 accent-sky-500 cursor-pointer"
+                />
+                <span className="text-[11px] font-mono text-slate-400 w-16 text-right">{scoreMax.toFixed(4)}</span>
+              </div>
+              <div className="text-center">
+                <span className="text-base font-bold font-mono text-slate-800">
+                  {(effectiveThreshold ?? initialThreshold).toFixed(4)}
+                </span>
+                {isThresholdModified && (
+                  <span className="ml-2 text-xs text-amber-600 font-medium">수정됨</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 지표 카드 (6개: Accuracy Precision Recall F1 F2 + AUC 고정) */}
+          <div className="grid grid-cols-6 gap-3">
+            {[
+              { label: 'Accuracy',  value: adjustedMetrics.accuracy,  fixed: false },
+              { label: 'Precision', value: adjustedMetrics.precision,  fixed: false },
+              { label: 'Recall',    value: adjustedMetrics.recall,     fixed: false },
+              { label: 'F1',        value: adjustedMetrics.f1_score,   fixed: false },
+              { label: 'F2',        value: adjustedMetrics.f2_score,   fixed: false },
+              { label: 'AUC',       value: selected.metrics.auc,       fixed: true  },
+            ].map(({ label, value, fixed }) => (
+              <div
+                key={label}
+                className={`border rounded-xl p-3 text-center ${
+                  fixed ? 'bg-slate-50 border-slate-200' : 'bg-sky-50 border-sky-100'
+                }`}
+              >
+                <p className="text-[11px] font-medium text-slate-500 mb-1">
+                  {label}{fixed && <span className="ml-1 text-[10px] text-slate-400">(고정)</span>}
+                </p>
+                <p className="text-xl font-bold text-slate-900">
+                  {value != null ? value.toFixed(4) : '—'}
+                </p>
               </div>
             ))}
           </div>
 
           {/* 차트 3열 */}
           <div className="grid grid-cols-3 gap-4">
-            <ConfusionMatrixChart metrics={selected.metrics} />
+            <ConfusionMatrixChart metrics={adjustedMetrics} />
             <RocCurveChart metrics={selected.metrics} />
-            <ScoreDistChart metrics={selected.metrics} thresholdValue={selected.threshold_value} />
+            <ScoreDistChart metrics={selected.metrics} thresholdValue={effectiveThreshold ?? undefined} />
           </div>
 
           {/* Tab5 이동 */}

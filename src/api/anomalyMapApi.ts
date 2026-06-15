@@ -20,8 +20,8 @@ export const getAnomalyImages = (
   });
 
 // image_path 형식: "{class}/{filename}"
-export const getTripletImageUrl = (expId: string, imagePath: string) =>
-  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/triplet`;
+export const getTripletImageUrl = (expId: string, imagePath: string, threshold: number) =>
+  `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/triplet?threshold=${threshold}`;
 
 export const getOriginalImageUrl = (expId: string, imagePath: string) =>
   `http://localhost:8000/api/anomaly-map/${expId}/image/${imagePath}/original`;

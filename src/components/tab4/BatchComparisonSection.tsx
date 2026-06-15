@@ -74,10 +74,10 @@ export default function BatchComparisonSection({ experiments }: { experiments: E
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[240px]">
             <table className="text-xs border-collapse min-w-full">
-              <thead>
-                <tr className="bg-gray-100">
+              <thead className="sticky top-0 z-10 bg-gray-100">
+                <tr>
                   {['실험명','세트ID','모델','전처리','이미지크기','파라미터요약',
                     'Th방식','Th값','Accuracy','Precision','Recall','F1','F2','AUC','실행시각'].map(h => (
                     <th
