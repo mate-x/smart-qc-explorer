@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import type { PreprocessingConfig, ModelConfig } from '../types/config';
-import { getConfig, saveConfig } from '../api/configApi';
+import { getConfig } from '../api/configApi';
 import { useConfigStore } from '../store/configStore';
+import { useLocalQueueStore } from '../store/localQueueStore';
 import { useDatasetStore } from '../store/datasetStore';
 import PreprocessingForm from '../components/config/PreprocessingForm';
 import ModelConfigForm from '../components/config/ModelConfigForm';
 import QueueSection from '../components/config/QueueSection';
-import AutoExperimentSection from '../components/config/AutoExperimentSection';
+import BatchExperimentForm from '../components/config/BatchExperimentForm';
 import { DEFAULT_EFFICIENTAD } from '../components/config/EfficientAdParams';
 
 const DEFAULT_PRE: PreprocessingConfig = {
@@ -30,22 +31,20 @@ const DEFAULT_MODEL: ModelConfig = {
 };
 
 export default function Tab2Config() {
-  const { setConfigs, setDeviceInfo } = useConfigStore();
+  const { setDeviceInfo } = useConfigStore();
+  const { addLocalItem, getOrCreateSetId } = useLocalQueueStore();
   const { datasetMeta, datasetPath } = useDatasetStore();
 
   const [preConfig, setPreConfig] = useState<PreprocessingConfig>(DEFAULT_PRE);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [isGpu, setIsGpu] = useState(false);
-
   const [loading, setLoading] = useState(true);
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
-  const [singleOpen, setSingleOpen] = useState(true);
-  const [queueOpen, setQueueOpen] = useState(false);
-  const [autoOpen, setAutoOpen] = useState(false);
-  const [queueRefreshTrigger, setQueueRefreshTrigger] = useState(0);
+
+  const [accordion1Open, setAccordion1Open] = useState(true);
+  const [accordion2Open, setAccordion2Open] = useState(false);
+
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -55,9 +54,10 @@ export default function Tab2Config() {
         if (preprocessing_config) setPreConfig(preprocessing_config);
         if (model_config) setModelConfig(model_config);
         const gpu = device_info.device === 'cuda';
-        const label = gpu && device_info.gpu_name
-          ? `${device_info.gpu_name}${device_info.vram_gb ? ` · ${device_info.vram_gb} GB` : ''}`
-          : 'CPU 모드';
+        const label =
+          gpu && device_info.gpu_name
+            ? `${device_info.gpu_name}${device_info.vram_gb ? ` · ${device_info.vram_gb} GB` : ''}`
+            : 'CPU 모드';
         setDeviceLabel(label);
         setIsGpu(gpu);
         setDeviceInfo(device_info);
@@ -67,29 +67,26 @@ export default function Tab2Config() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSave() {
+  useEffect(() => {
+    if (!datasetMeta) return;
+    const available = datasetMeta.available_bg_methods ?? [];
+    setPreConfig(prev =>
+      prev.background_method !== 'none' && !available.includes(prev.background_method)
+        ? { ...prev, background_method: 'none' }
+        : prev,
+    );
+  }, [datasetPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleAddToQueue() {
     if (preConfig.image_size % 32 !== 0) {
-      setSaveError('이미지 크기가 32의 배수가 아닙니다. 수정 후 저장해 주세요.');
+      setAddError('이미지 크기가 32의 배수가 아닙니다.');
       return;
     }
-    setSaveLoading(true);
-    setSaveError(null);
-    setSaveOk(false);
-    try {
-      await saveConfig(preConfig, modelConfig);
-      setConfigs(preConfig, modelConfig);
-      setSaveOk(true);
-      setTimeout(() => setSaveOk(false), 3000);
-    } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setSaveError(
-        typeof detail === 'string' ? detail : (e as { message?: string })?.message ?? '저장 실패',
-      );
-    } finally {
-      setSaveLoading(false);
-    }
+    setAddError(null);
+    const setId = getOrCreateSetId();
+    addLocalItem(preConfig, modelConfig, setId);
   }
 
   if (loading) {
@@ -104,7 +101,9 @@ export default function Tab2Config() {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 flex flex-col items-center gap-3 text-center">
         <p className="text-sm font-medium text-amber-800">데이터셋을 먼저 검증해 주세요</p>
-        <p className="text-xs text-amber-600">탭1에서 데이터셋 경로를 입력하고 검증을 완료해야 설정 탭을 사용할 수 있습니다.</p>
+        <p className="text-xs text-amber-600">
+          탭1에서 데이터셋 경로를 입력하고 검증을 완료해야 설정 탭을 사용할 수 있습니다.
+        </p>
       </div>
     );
   }
@@ -113,41 +112,45 @@ export default function Tab2Config() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 디바이스 정보 */}
-      {deviceLabel && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3 flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full shrink-0 ${isGpu ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-          <span className="text-xs font-medium text-slate-600">{deviceLabel}</span>
-        </div>
-      )}
+      {/* 상단 바: 디바이스 정보만 */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3 flex items-center gap-4">
+        {deviceLabel && (
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${isGpu ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+            <span className="text-xs font-medium text-slate-600">{deviceLabel}</span>
+          </div>
+        )}
+      </div>
 
-      {/* 1. 단일 실험 설계 */}
+      {/* 아코디언 1: 개별 실험 등록 — 기본 열림 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <button type="button" onClick={() => setSingleOpen(o => !o)} className={accordionBtn}>
-          <span className="text-slate-400 text-xs">{singleOpen ? '▾' : '▸'}</span>
-          단일 실험 설계
+        <button
+          type="button"
+          onClick={() => setAccordion1Open((o) => !o)}
+          className="w-full flex items-center gap-2 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer"
+        >
+          <span className="text-slate-400 text-xs">{accordion1Open ? '▾' : '▸'}</span>
+          개별 실험 등록
         </button>
-        {singleOpen && (
+        {accordion1Open && (
           <div className="px-5 pb-5 border-t border-slate-100">
             <div className="pt-4 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="border border-slate-200 rounded-xl p-5">
+                <div className="rounded-xl border border-slate-100 p-4">
                   <PreprocessingForm value={preConfig} onChange={setPreConfig} datasetPath={datasetPath} />
                 </div>
-                <div className="border border-slate-200 rounded-xl p-5">
+                <div className="rounded-xl border border-slate-100 p-4">
                   <ModelConfigForm value={modelConfig} onChange={setModelConfig} />
                 </div>
               </div>
-              <div className="flex items-center gap-3 justify-end">
-                {saveOk && (
-                  <span className="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-                    저장 완료
-                  </span>
-                )}
-                {saveError && <span className="text-xs text-red-600">{saveError}</span>}
-                <button onClick={handleSave} disabled={saveLoading}
-                  className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition-colors cursor-pointer whitespace-nowrap">
-                  {saveLoading ? '저장 중...' : '설정 저장'}
+              <div className="flex justify-end items-center gap-3">
+                {addError && <span className="text-xs text-red-600">{addError}</span>}
+                <button
+                  type="button"
+                  onClick={handleAddToQueue}
+                  className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                >
+                  + 대기열 추가
                 </button>
               </div>
             </div>
@@ -155,42 +158,28 @@ export default function Tab2Config() {
         )}
       </div>
 
-      {/* 2. 학습 대기열 */}
+      {/* 아코디언 2: 실험 조합 생성 — 기본 닫힘 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <button type="button" onClick={() => setQueueOpen(o => !o)} className={accordionBtn}>
-          <span className="text-slate-400 text-xs">{queueOpen ? '▾' : '▸'}</span>
-          학습 대기열
+        <button
+          type="button"
+          onClick={() => setAccordion2Open((o) => !o)}
+          className="w-full flex items-center gap-2 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer"
+        >
+          <span className="text-slate-400 text-xs">{accordion2Open ? '▾' : '▸'}</span>
+          실험 조합 생성
         </button>
-        {queueOpen && (
+        {accordion2Open && (
           <div className="px-5 pb-5 border-t border-slate-100">
             <div className="pt-4">
-              <QueueSection
-                preprocessingConfig={preConfig}
-                modelConfig={modelConfig}
-                refreshTrigger={queueRefreshTrigger}
-              />
+              <BatchExperimentForm preConfig={preConfig} />
             </div>
           </div>
         )}
       </div>
 
-      {/* 3. 자동 실험 설계 */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <button type="button" onClick={() => setAutoOpen(o => !o)} className={accordionBtn}>
-          <span className="text-slate-400 text-xs">{autoOpen ? '▾' : '▸'}</span>
-          자동 실험 설계 (멀티 셀렉트)
-        </button>
-        {autoOpen && (
-          <div className="px-5 pb-5 border-t border-slate-100">
-            <div className="pt-4">
-              <AutoExperimentSection
-                preprocessingConfig={preConfig}
-                modelConfig={modelConfig}
-                onQueueChanged={() => setQueueRefreshTrigger(n => n + 1)}
-              />
-            </div>
-          </div>
-        )}
+      {/* 실험 대기열 — 항상 표시 */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <QueueSection />
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ export interface ExperimentMetrics {
 export interface Experiment {
   experiment_id: string;
   name: string;
-  status: 'completed' | '중단' | '실패' | '건너뜀';
+  status: 'completed' | '중단' | '실패' | '건너뜀'; // history.json 호환성 때문에 한국어 유지
   created_at: string;
   model_type: 'efficientad' | 'patchcore';
   metrics: ExperimentMetrics | null;
@@ -32,7 +32,7 @@ export interface Experiment {
   // 배치 비교 / 상세 표시용 추가 필드
   preprocessing_method?: string;
   preprocessing_params?: Record<string, unknown> | null;
-  background_method?: 'none' | 'sam2';
+  background_method?: 'none' | 'sam2' | 'sam3';
   model_params?: Record<string, unknown>;
   threshold_method?: string;
   threshold_value?: number;

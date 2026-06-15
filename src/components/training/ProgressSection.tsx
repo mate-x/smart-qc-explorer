@@ -17,13 +17,15 @@ function downsample(points: LossPoint[], max = 500): LossPoint[] {
 }
 
 function fmtSecs(s: number): string {
-  const m = Math.floor(s / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const sec = Math.floor(s % 60);
+  if (h > 0) return `${h}시간 ${m}분 ${sec}초`;
   return m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
 }
 
 export default function ProgressSection() {
-  const { status, progress, loss_history, log_lines, batch_mode, batch_total, batch_done } =
+  const { status, progress, loss_history, log_lines, batch_mode, batch_total, batch_done, model_type, current_stage_name } =
     useTrainingStore();
   const logRef = useRef<HTMLPreElement>(null);
   const [ctrlError, setCtrlError] = useState<string | null>(null);
@@ -34,10 +36,29 @@ export default function ProgressSection() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log_lines]);
 
+  const inferenceBaseRef = useRef<number>(0);
+  const [inferenceCount, setInferenceCount] = useState(0);
+
   const pct = progress ? Math.min(100, Math.round((progress.step / progress.total) * 100)) : 0;
   const ratio = progress ? progress.step / progress.total : 0;
   const etaSecs = ratio > 0 && progress ? Math.round((progress.elapsed / ratio) * (1 - ratio)) : null;
   const chartData = downsample(loss_history, 500);
+  const isInferenceStage = current_stage_name === '테스트 추론' || current_stage_name === '완료';
+
+  useEffect(() => {
+    if (!isInferenceStage) {
+      setInferenceCount(0);
+      return;
+    }
+    inferenceBaseRef.current = progress?.elapsed ?? 0;
+    setInferenceCount(0);
+    let count = 0;
+    const timer = setInterval(() => {
+      count += 1;
+      setInferenceCount(count);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isInferenceStage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePauseToggle() {
     setPauseLoading(true);
@@ -74,13 +95,21 @@ export default function ProgressSection() {
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-slate-500">일괄 학습</span>
           <span className="text-xs bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
-            {batch_done} / {batch_total}
+            {batch_done+1} / {batch_total}
           </span>
         </div>
       )}
 
-      {/* 진행률 바 */}
-      {progress && (
+      {/* 진행률 바 / 추론 중 표시 */}
+      {isInferenceStage ? (
+        <div className="flex items-center gap-3 py-1">
+          <span className="inline-block w-4 h-4 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin shrink-0" />
+          <span className="text-sm font-medium text-violet-700">테스트 추론 진행 중...</span>
+          {progress && (
+            <span className="text-xs text-slate-400">경과: {fmtSecs(inferenceBaseRef.current + inferenceCount)}</span>
+          )}
+        </div>
+      ) : progress ? (
         <div className="flex flex-col gap-2">
           <div className="flex justify-between items-center text-xs text-slate-500">
             <span>Step {progress.step.toLocaleString()} / {progress.total.toLocaleString()}</span>
@@ -93,12 +122,14 @@ export default function ProgressSection() {
             />
           </div>
           <div className="flex gap-5 text-xs text-slate-500">
-            <span>Loss: <span className="font-mono font-medium text-slate-800">{progress.loss.toFixed(6)}</span></span>
+            {model_type !== 'patchcore' && (
+              <span>Loss: <span className="font-mono font-medium text-slate-800">{progress.loss.toFixed(6)}</span></span>
+            )}
             <span>경과: {fmtSecs(progress.elapsed)}</span>
             {etaSecs != null && <span>예상 잔여: {fmtSecs(etaSecs)}</span>}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* 제어 버튼 */}
       <div className="flex gap-2 items-center flex-wrap">
@@ -127,8 +158,8 @@ export default function ProgressSection() {
         {ctrlError && <p className="text-xs text-red-600">{ctrlError}</p>}
       </div>
 
-      {/* Loss 차트 */}
-      {chartData.length > 1 && (
+      {/* Loss 차트 — 추론 단계 진입 후 숨김 */}
+      {!isInferenceStage && model_type !== 'patchcore' && chartData.length > 1 && (
         <div>
           <p className="text-xs font-medium text-slate-500 mb-2">Loss 추이</p>
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">

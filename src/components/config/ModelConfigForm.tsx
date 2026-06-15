@@ -1,5 +1,4 @@
 import type { ModelConfig } from '../../types/config';
-import type { EfficientAdParamsState, PatchCoreParamsState } from '../../types/modelParams';
 import EfficientAdParams, { DEFAULT_EFFICIENTAD } from './EfficientAdParams';
 import PatchCoreParams, { DEFAULT_PATCHCORE } from './PatchCoreParams';
 
@@ -30,15 +29,15 @@ function computeThresholdRatio(method: string, value: number): { normal: number;
 
 export default function ModelConfigForm({ value, onChange }: Props) {
   function set<K extends keyof ModelConfig>(key: K, val: ModelConfig[K]) {
-    onChange({ ...value, [key]: val });
+    onChange({ ...value, [key]: val } as ModelConfig);
   }
 
   function handleModelTypeChange(mt: 'efficientad' | 'patchcore') {
-    onChange({
-      ...value,
-      model_type: mt,
-      params: mt === 'efficientad' ? DEFAULT_EFFICIENTAD : DEFAULT_PATCHCORE,
-    });
+    if (mt === 'efficientad') {
+      onChange({ ...value, model_type: 'efficientad', params: DEFAULT_EFFICIENTAD });
+    } else {
+      onChange({ ...value, model_type: 'patchcore', params: DEFAULT_PATCHCORE });
+    }
   }
 
   const thresholdRatio = computeThresholdRatio(value.threshold_method, value.threshold_value);
@@ -83,13 +82,13 @@ export default function ModelConfigForm({ value, onChange }: Props) {
       <div className="border-t border-slate-100 pt-4">
         {value.model_type === 'efficientad' ? (
           <EfficientAdParams
-            value={(value.params as EfficientAdParamsState) ?? DEFAULT_EFFICIENTAD}
-            onChange={(p) => set('params', p)}
+            value={value.params}
+            onChange={(p) => onChange({ ...value, params: p })}
           />
         ) : (
           <PatchCoreParams
-            value={(value.params as PatchCoreParamsState) ?? DEFAULT_PATCHCORE}
-            onChange={(p) => set('params', p)}
+            value={value.params}
+            onChange={(p) => onChange({ ...value, params: p })}
           />
         )}
       </div>

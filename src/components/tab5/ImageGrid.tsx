@@ -4,7 +4,8 @@ import {
   getTripletImageUrl,
   getOriginalImageUrl,
   getGtMaskImageUrl,
-  getHeatmapImageUrl,
+  getOverlayImageUrl,
+  getPredictedMaskImageUrl,
 } from '../../api/anomalyMapApi';
 
 const PAGE_SIZE = 20;
@@ -45,15 +46,29 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 통계 바 */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-        <span>전체 {images.length}개</span>
-        <span className="text-green-700 font-medium">TP {tp}</span>
-        <span className="text-red-700 font-medium">FP {fp}</span>
-        <span className="text-blue-700 font-medium">TN {tn}</span>
-        <span className="text-orange-700 font-medium">FN {fn}</span>
-        <span>Max: {score_max.toFixed(4)}</span>
-        <span>Avg: {score_avg.toFixed(4)}</span>
+      {/* 통계 배지 */}
+      <div className="flex flex-wrap gap-2">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-slate-50 border-slate-200 text-slate-600">
+          전체 <span className="font-bold text-slate-800">{images.length}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-green-50 border-green-200 text-green-700">
+          TP <span className="font-bold">{tp}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-red-50 border-red-200 text-red-700">
+          FP <span className="font-bold">{fp}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-blue-50 border-blue-200 text-blue-700">
+          TN <span className="font-bold">{tn}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-orange-50 border-orange-200 text-orange-700">
+          FN <span className="font-bold">{fn}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-slate-50 border-slate-200 text-slate-500">
+          Max <span className="font-bold text-slate-700">{score_max.toFixed(4)}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-slate-50 border-slate-200 text-slate-500">
+          Avg <span className="font-bold text-slate-700">{score_avg.toFixed(4)}</span>
+        </span>
       </div>
 
       {images.length === 0 ? (
@@ -95,7 +110,7 @@ export default function ImageGrid({ imagesData, expId, threshold, page, onPageCh
         </>
       )}
 
-      {/* 하단 3-panel 상세 패널 */}
+      {/* 하단 상세 패널 */}
       {selectedImage && (
         <div ref={panelRef}>
           <DetailPanel
@@ -163,10 +178,7 @@ interface DetailPanelProps {
 }
 
 function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
-  const [gtMaskError, setGtMaskError] = useState(false);
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => { setGtMaskError(false); }, [img.image_path]);
 
   const verdict = img.anomaly_score >= threshold ? 'NG' : 'OK';
   const stem = img.image_name.replace(/\.[^/.]+$/, '');
@@ -202,34 +214,26 @@ function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
 
       <p className="text-xs text-slate-500 -mt-2">{img.image_name}</p>
 
-      {/* 3-panel */}
-      <div className="grid grid-cols-3 gap-3">
-        <PanelImage
-          label="원본 이미지"
-          src={getOriginalImageUrl(expId, img.image_path)}
-          alt="원본 이미지"
-        />
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-slate-500 font-medium">GT 마스크</p>
-          {gtMaskError ? (
-            <div className="flex-1 bg-slate-200 rounded flex items-center justify-center min-h-32">
-              <p className="text-xs text-slate-400">GT 마스크 없음</p>
-            </div>
-          ) : (
-            <img
-              src={getGtMaskImageUrl(expId, img.image_path)}
-              alt="GT 마스크"
-              className="w-full rounded object-contain bg-slate-100"
-              onError={() => setGtMaskError(true)}
-            />
-          )}
+      {/* GT 있을 때: 2×2 그리드 */}
+      {img.has_gt_mask ? (
+        <div className="grid grid-cols-2 gap-3">
+          <PanelImage label="원본 이미지" src={getOriginalImageUrl(expId, img.image_path)} alt="원본 이미지" />
+          <PanelImage label="Overlay" src={getOverlayImageUrl(expId, img.image_path, threshold)} alt="Overlay" />
+          <PanelImage label="GT 마스크" src={getGtMaskImageUrl(expId, img.image_path)} alt="GT 마스크" />
+          <PanelImage label="Predicted Mask" src={getPredictedMaskImageUrl(expId, img.image_path, threshold)} alt="Predicted Mask" />
         </div>
-        <PanelImage
-          label="Anomaly Heatmap (윤곽선 오버레이)"
-          src={getHeatmapImageUrl(expId, img.image_path)}
-          alt="Anomaly Heatmap"
-        />
-      </div>
+      ) : (
+        /* GT 없을 때: 3-panel 1행 */
+        <div className="grid grid-cols-3 gap-3">
+          <PanelImage label="원본 이미지" src={getOriginalImageUrl(expId, img.image_path)} alt="원본 이미지" />
+          <PanelImage label="Overlay" src={getOverlayImageUrl(expId, img.image_path, threshold)} alt="Overlay" />
+          <PanelImage label="Predicted Mask" src={getPredictedMaskImageUrl(expId, img.image_path, threshold)} alt="Predicted Mask" />
+        </div>
+      )}
+
+      {!img.has_gt_mask && (
+        <p className="text-xs text-slate-400">GT 마스크 없음</p>
+      )}
 
       {/* 메트릭 */}
       <div className="grid grid-cols-3 gap-3">

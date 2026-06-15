@@ -25,6 +25,8 @@ interface TrainingState extends TrainingStatusResponse {
   bumpQueueSignal: () => void;
   clearLastResult: () => void;
   setWsError: (msg: string | null) => void;
+  setCurrentModelType: (model_type: string | null) => void;
+  clearRunData: () => void;
   reset: () => void;
 }
 
@@ -44,6 +46,7 @@ const initialState: TrainingStatusResponse & {
   log_lines: [],
   loss_history: [],
   last_ckpt_path: null,
+  model_type: null,
   batch_done: 0,
   last_result: null,
   ws_error: null,
@@ -54,7 +57,15 @@ export const useTrainingStore = create<TrainingState>((set) => ({
   ...initialState,
 
   setFromSnapshot: (snapshot) =>
-    set({ ...snapshot, batch_done: 0, last_result: null, ws_error: null }),
+    set((prev) => ({
+      ...snapshot,
+      // HTTP snapshot이 늦게 resolve되어 WS가 설정한 running 상태를 idle로 덮어쓰는 race condition 방지
+      status: prev.status === 'running' && snapshot.status === 'idle' ? 'running' : snapshot.status,
+      // WS 재연결 시 진행 중이던 배치 카운트 초기화 방지
+      batch_done: prev.batch_done,
+      last_result: null,
+      ws_error: null,
+    })),
 
   updateProgress: (step, total, loss, elapsed) =>
     set((state) => {
@@ -78,15 +89,20 @@ export const useTrainingStore = create<TrainingState>((set) => ({
 
   setPaused: (ckptPath) => set({ status: 'paused', last_ckpt_path: ckptPath }),
 
-  setCompleted: (_expId, auc, durationSecs, message, earlyStopped) =>
+  setCompleted: (_expId, auc, durationSecs, message, earlyStopped) => {
+    const h = Math.floor(durationSecs / 3600);
+    const m = Math.floor((durationSecs % 3600) / 60);
+    const sec = Math.floor(durationSecs % 60);
+    const durStr = h > 0 ? `${h}시간 ${m}분 ${sec}초` : m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
     set({
       status: 'idle',
       progress: null,
       last_result: {
         level: 'success',
-        msg: message || `${earlyStopped ? '[Early Stopping] ' : ''}학습 완료. AUC: ${auc.toFixed(4)} | ${Math.floor(durationSecs / 60)}분 ${durationSecs % 60}초`,
+        msg: message || `${earlyStopped ? '[Early Stopping] ' : ''}학습 완료. AUC: ${auc.toFixed(4)} | ${durStr}`,
       },
-    }),
+    });
+  },
 
   setStopped: () =>
     set({
@@ -97,22 +113,40 @@ export const useTrainingStore = create<TrainingState>((set) => ({
 
   incBatchDone: () => set((s) => ({ batch_done: s.batch_done + 1 })),
 
-  setBatchCompleted: (completed, failed, skipped) =>
+  setBatchCompleted: (completed, failed, skipped) => {
+    const isSingle = completed === 1 && failed === 0 && skipped === 0;
     set({
       status: 'idle',
       batch_mode: false,
+      batch_done: 0,
+      batch_total: 0,
       progress: null,
-      last_result: {
-        level: failed > 0 ? 'warning' : 'success',
-        msg: `일괄 학습 완료. 완료: ${completed}개 | 실패: ${failed}개 | 건너뜀: ${skipped}개`,
-      },
-    }),
+      // Q12: 단일 완료 시 last_result 생략 (setCompleted의 AUC 메시지 유지)
+      ...(!isSingle && {
+        last_result: {
+          level: failed > 0 ? 'warning' : 'success',
+          msg: `일괄 학습 완료. 완료: ${completed}개 | 실패: ${failed}개 | 건너뜀: ${skipped}개`,
+        },
+      }),
+    });
+  },
 
   bumpQueueSignal: () => set((s) => ({ batch_queue_signal: s.batch_queue_signal + 1 })),
 
   clearLastResult: () => set({ last_result: null }),
 
   setWsError: (msg) => set({ ws_error: msg }),
+
+  setCurrentModelType: (model_type) => set({ model_type }),
+
+  clearRunData: () =>
+    set({
+      log_lines: [],
+      loss_history: [],
+      progress: null,
+      current_stage_idx: null,
+      current_stage_name: null,
+    }),
 
   reset: () => set(initialState),
 }));

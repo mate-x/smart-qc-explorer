@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PreprocessingConfig } from '../../types/config';
+import { useDatasetStore } from '../../store/datasetStore';
 import { previewPreprocessing } from '../../api/configApi';
 import type { PreviewImageResponse } from '../../types/config';
 
@@ -10,7 +11,6 @@ interface Props {
 }
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow';
-const selectCls = inputCls + ' cursor-pointer';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -22,6 +22,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function PreprocessingForm({ value, onChange, datasetPath }: Props) {
+  const { datasetMeta } = useDatasetStore();
+  const availableBgMethods = datasetMeta?.available_bg_methods ?? [];
+
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewImageResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -102,17 +105,6 @@ export default function PreprocessingForm({ value, onChange, datasetPath }: Prop
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-        <Field label="배경 분리">
-          <select
-            value={value.background_method}
-            onChange={(e) => set('background_method', e.target.value as 'none' | 'sam2')}
-            className={selectCls}
-          >
-            <option value="none">none</option>
-            <option value="sam2">SAM2</option>
-          </select>
-        </Field>
-
         {/* homomorphic 파라미터 */}
         {value.method === 'homomorphic' && (
           <>
@@ -174,6 +166,38 @@ export default function PreprocessingForm({ value, onChange, datasetPath }: Prop
             <p className="text-xs text-red-500 mt-1">32의 배수만 입력 가능합니다.</p>
           )}
         </Field>
+      </div>
+
+      {/* 배경 분리 */}
+      <div>
+        <label className="block text-xs font-medium text-slate-500 mb-1.5">배경 분리</label>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['none', 'sam2', 'sam3'] as const).map((m) => {
+            const isDisabled = m !== 'none' && !availableBgMethods.includes(m);
+            return (
+              <button key={m} type="button"
+                onClick={() => set('background_method', m)}
+                disabled={isDisabled}
+                className={`px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+                  isDisabled
+                    ? 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed'
+                    : value.background_method === m
+                    ? 'bg-sky-600 text-white border-sky-600 cursor-pointer'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer'
+                }`}>
+                {m === 'none' ? 'none' : m.toUpperCase()}
+              </button>
+            );
+          })}
+        </div>
+        {datasetMeta && (['sam2', 'sam3'] as const).filter(m => !availableBgMethods.includes(m)).length > 0 && (
+          <p className="mt-1.5 text-xs text-slate-400">
+            {(['sam2', 'sam3'] as const)
+              .filter(m => !availableBgMethods.includes(m))
+              .map(m => `${datasetPath?.split(/[\\/]/).pop() ?? ''}_${m}`)
+              .join(', ')} 폴더 없음
+          </p>
+        )}
       </div>
 
       {/* 미리보기 섹션 */}

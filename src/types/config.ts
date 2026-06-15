@@ -4,7 +4,7 @@ export type { EfficientAdParamsState, PatchCoreParamsState };
 
 export interface PreprocessingConfig {
   method: 'none' | 'homomorphic' | 'he' | 'clahe';
-  background_method: 'none' | 'sam2';
+  background_method: 'none' | 'sam2' | 'sam3';
   resize_mode: 'padding';
   image_size: number;
   normalization: 'imagenet';
@@ -13,19 +13,32 @@ export interface PreprocessingConfig {
   params: Record<string, unknown> | null;
 }
 
-export interface ModelConfig {
-  model_type: 'efficientad' | 'patchcore';
+export interface EfficientAdModelConfig {
+  model_type: 'efficientad';
   batch_size: number;
   random_seed: number;
   threshold_method: 'percentile' | 'absolute';
   threshold_value: number;
-  params: EfficientAdParamsState | PatchCoreParamsState;
+  params: EfficientAdParamsState;
 }
+
+export interface PatchCoreModelConfig {
+  model_type: 'patchcore';
+  batch_size: number;
+  random_seed: number;
+  threshold_method: 'percentile' | 'absolute';
+  threshold_value: number;
+  params: PatchCoreParamsState;
+}
+
+export type ModelConfig = EfficientAdModelConfig | PatchCoreModelConfig;
 
 export interface DeviceInfo {
   device: 'cuda' | 'cpu';
   gpu_name?: string;
   vram_gb?: number;
+  openvino_available?: boolean;
+  trt_available?: boolean;
 }
 
 export interface ConfigResponse {
@@ -39,7 +52,7 @@ export interface QueueItem {
   name: string;
   preprocessing_config: PreprocessingConfig;
   model_config: ModelConfig;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'stopped';
   set_id?: string | null;
   duration_seconds?: number | null;
 }

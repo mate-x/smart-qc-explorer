@@ -45,6 +45,17 @@ export default function Tab1Dataset() {
           {/* 왼쪽: 폼 */}
           <div className="flex flex-col gap-4">
             <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">검사 제품명</label>
+              <input
+                type="text"
+                value={productNameInput}
+                onChange={e => setProductNameInput(e.target.value)}
+                placeholder="예: screw, bolt, pill ..."
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
+              />
+            </div>
+
+            <div>
               <label className="block text-xs font-medium text-slate-500 mb-1.5">Dataset Path</label>
               <div className="flex gap-2">
                 <input
@@ -69,17 +80,6 @@ export default function Tab1Dataset() {
                 </p>
               )}
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">검사 제품명</label>
-              <input
-                type="text"
-                value={productNameInput}
-                onChange={e => setProductNameInput(e.target.value)}
-                placeholder="예: screw, bolt, pill ..."
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-shadow"
-              />
-            </div>
           </div>
 
           {/* 오른쪽: 폴더 구조 */}
@@ -102,11 +102,6 @@ export default function Tab1Dataset() {
         {/* 검증 후 배너 */}
         {datasetMeta && (
           <div className="mt-4 flex flex-col gap-2">
-            {!datasetMeta.has_background_clean && (
-              <div className="bg-sky-50 border border-sky-200 rounded-lg px-4 py-2.5 text-xs text-sky-700">
-                배경 분리 이미지 없음 (background_clean/ ❌) — SAM2 사용 시 필요합니다.
-              </div>
-            )}
             {datasetMeta.channels === 1 && (
               <div className="bg-sky-50 border border-sky-200 rounded-lg px-4 py-2.5 text-xs text-sky-700">
                 그레이스케일 이미지로 감지되었습니다. (1채널)
