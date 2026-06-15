@@ -11,6 +11,8 @@ const IMAGENET_STD: [number, number, number] = [0.229, 0.224, 0.225];
 
 // ── 유틸 ──
 
+const fmtLR = (v: number) => String(v);
+
 function toggle<T>(arr: T[], item: T): T[] {
   return arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item];
 }
@@ -645,7 +647,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                       onAdd={(v) => setEffLRs((prev) => sortedAdd(prev, v))}
                       onRemove={(v) => setEffLRs((prev) => prev.filter((x) => x !== v))}
                       defaultValue={0.0001} step={0.0001}
-                      fmt={(v) => v.toExponential(2)}
+                      fmt={fmtLR}
                     />
                   </Field>
                   <div>
@@ -667,7 +669,7 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                           <TagInput values={effWeightDecays}
                             onAdd={(v) => setEffWeightDecays((prev) => sortedAdd(prev, v))}
                             onRemove={(v) => setEffWeightDecays((prev) => prev.filter((x) => x !== v))}
-                            defaultValue={0.0001} step={0.00001} fmt={(v) => v.toExponential(2)} />
+                            defaultValue={0.0001} step={0.00001} fmt={fmtLR} />
                         </Field>
                         <Field label="AE Loss 비중 (ae_loss_weight)">
                           <TagInput values={effAeLossWeights}
@@ -679,13 +681,13 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                           <TagInput values={effAeLrs}
                             onAdd={(v) => setEffAeLrs((prev) => sortedAdd(prev, v))}
                             onRemove={(v) => setEffAeLrs((prev) => prev.filter((x) => x !== v))}
-                            defaultValue={0.0001} step={0.00001} fmt={(v) => v.toExponential(2)} />
+                            defaultValue={0.0001} step={0.00001} fmt={fmtLR} />
                         </Field>
                         <Field label="AE 가중치 감쇠 (autoencoder_weight_decay)">
                           <TagInput values={effAeWeightDecays}
                             onAdd={(v) => setEffAeWeightDecays((prev) => sortedAdd(prev, v))}
                             onRemove={(v) => setEffAeWeightDecays((prev) => prev.filter((x) => x !== v))}
-                            defaultValue={0.00001} step={0.000001} fmt={(v) => v.toExponential(2)} />
+                            defaultValue={0.00001} step={0.000001} fmt={fmtLR} />
                         </Field>
                         <Field label="LR Decay Steps (lr_decay_epochs)">
                           <TagInput values={effLrDecayEpochs}
@@ -810,13 +812,13 @@ export default function BatchExperimentForm({ preConfig }: Props) {
                   <SummaryRow label="스케줄러" values={effSchedulers} />
                   <SummaryRow label="출력채널" values={effOutChannels} />
                   <SummaryRow label="Train Steps" values={ns(effTrainSteps, v => v.toLocaleString())} />
-                  <SummaryRow label="LR" values={ns(effLRs, v => v.toExponential(2))} />
+                  <SummaryRow label="LR" values={ns(effLRs, fmtLR)} />
                   <SummaryRow label="패딩" values={effPaddings} />
                   <SummaryRow label="ImageNet Penalty" values={effPenalties} />
-                  <SummaryRow label="weight_decay" values={ns(effWeightDecays, v => v.toExponential(2))} />
+                  <SummaryRow label="weight_decay" values={ns(effWeightDecays, fmtLR)} />
                   <SummaryRow label="ae_loss_weight" values={ns(effAeLossWeights)} />
-                  <SummaryRow label="autoencoder_lr" values={ns(effAeLrs, v => v.toExponential(2))} />
-                  <SummaryRow label="ae_weight_decay" values={ns(effAeWeightDecays, v => v.toExponential(2))} />
+                  <SummaryRow label="autoencoder_lr" values={ns(effAeLrs, fmtLR)} />
+                  <SummaryRow label="ae_weight_decay" values={ns(effAeWeightDecays, fmtLR)} />
                   <SummaryRow label="lr_decay_steps" values={ns(effLrDecayEpochs, v => v.toLocaleString())} />
                   <SummaryRow label="lr_decay_factor" values={ns(effLrDecayFactors)} />
                   <SummaryRow label="penalty_batch" values={ns(effPenaltyBatches)} />

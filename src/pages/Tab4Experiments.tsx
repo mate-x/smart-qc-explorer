@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getExperiments, deleteExperiment } from '../api/experimentsApi';
 import { startExport, getExportJobStatus } from '../api/exportApi';
@@ -16,6 +16,14 @@ import RocCurveChart from '../components/tab4/RocCurveChart';
 import ScoreDistChart from '../components/tab4/ScoreDistChart';
 import ComparisonSection from '../components/tab4/ComparisonSection';
 import BatchComparisonSection from '../components/tab4/BatchComparisonSection';
+import { useTab4ColumnStore } from '../store/tab4ColumnStore';
+
+const BASICS_COL_COUNT = 3;
+const METRIC_COL_COUNT = 6;
+
+const thCls = 'px-3 py-2 text-left text-xs font-semibold text-slate-500 whitespace-nowrap bg-slate-50 border-b border-slate-200';
+const thGroupCls = `${thCls} cursor-pointer select-none hover:bg-slate-100 transition-colors border-l border-slate-200`;
+const thSortCls = `${thCls} cursor-pointer select-none hover:text-slate-700`;
 
 export default function Tab4Experiments() {
   const navigate = useNavigate();
@@ -47,6 +55,21 @@ export default function Tab4Experiments() {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(col); setSortDir('desc'); }
   }
+
+  const { basicsOpen, metricsOpen, setBasicsOpen, setMetricsOpen } = useTab4ColumnStore();
+
+  const groupHeaderRowRef = useRef<HTMLTableRowElement>(null);
+  const [groupHeaderHeight, setGroupHeaderHeight] = useState(36);
+
+  useEffect(() => {
+    const el = groupHeaderRowRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setGroupHeaderHeight(el.getBoundingClientRect().height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const sortedExperiments = useMemo(() => {
     if (!sortCol) return experiments;
@@ -229,13 +252,55 @@ export default function Tab4Experiments() {
         <div className="overflow-x-auto overflow-y-auto max-h-[260px]">
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10">
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {['제품', '실험명', '모델', '파라미터', 'Accuracy', 'Precision', 'Recall', 'F1', 'F2', 'AUC', '실행 시각', '상태'].map(h => (
-                  <th key={h} onClick={() => handleSort(h)} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 whitespace-nowrap cursor-pointer select-none hover:text-slate-700">
-                    {h}{sortCol === h && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}
-                  </th>
-                ))}
-                <th className="px-4 py-3" />
+              {/* Row 1: 그룹 헤더 */}
+              <tr ref={groupHeaderRowRef}>
+                <th rowSpan={2} className={`sticky left-0 z-30 border-r border-slate-200 cursor-pointer select-none hover:text-slate-700 ${thCls}`} onClick={() => handleSort('실험명')}>
+                  실험명{sortCol === '실험명' && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                </th>
+                <th
+                  colSpan={basicsOpen ? BASICS_COL_COUNT : 1}
+                  className={thGroupCls}
+                  onClick={() => setBasicsOpen(!basicsOpen)}
+                >
+                  {basicsOpen ? '▾' : '▸'} [기본]
+                </th>
+                <th
+                  colSpan={metricsOpen ? METRIC_COL_COUNT : 1}
+                  className={thGroupCls}
+                  onClick={() => setMetricsOpen(!metricsOpen)}
+                >
+                  {metricsOpen ? '▾' : '▸'} [메트릭]
+                </th>
+                <th rowSpan={2} className={`sticky right-40 z-30 w-[10rem] cursor-pointer select-none hover:text-slate-700 ${thCls}`} onClick={() => handleSort('실행 시각')}>
+                  실행 시각{sortCol === '실행 시각' && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                </th>
+                <th rowSpan={2} className={`sticky right-12 z-30 w-[7rem] cursor-pointer select-none hover:text-slate-700 ${thCls}`} onClick={() => handleSort('상태')}>
+                  상태{sortCol === '상태' && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                </th>
+                <th rowSpan={2} className={`sticky right-0 z-30 w-[3rem] ${thCls}`} />
+              </tr>
+              {/* Row 2: 컬럼 헤더 */}
+              <tr style={{ top: groupHeaderHeight }}>
+                {basicsOpen ? (
+                  <>
+                    <th className={thSortCls} onClick={() => handleSort('제품')}>제품{sortCol === '제품' && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}</th>
+                    <th className={thSortCls} onClick={() => handleSort('모델')}>모델{sortCol === '모델' && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}</th>
+                    <th className={thSortCls} onClick={() => handleSort('파라미터')}>파라미터{sortCol === '파라미터' && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}</th>
+                  </>
+                ) : (
+                  <th />
+                )}
+                {metricsOpen ? (
+                  <>
+                    {(['Accuracy', 'Precision', 'Recall', 'F1', 'F2', 'AUC'] as const).map(h => (
+                      <th key={h} className={thSortCls} onClick={() => handleSort(h)}>
+                        {h}{sortCol === h && <span className="ml-1 text-sky-500">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                      </th>
+                    ))}
+                  </>
+                ) : (
+                  <th />
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -244,33 +309,49 @@ export default function Tab4Experiments() {
                 const isDimmed = e.status === '중단';
                 const m = e.metrics;
                 const isCompleted = e.status === 'completed';
+                const stickyBg = isSelected ? 'bg-sky-50' : 'bg-white group-hover:bg-slate-50';
                 return (
                   <tr
                     key={e.experiment_id}
                     onClick={() => setSelectedExperimentId(isSelected ? null : e.experiment_id)}
-                    className={`cursor-pointer transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'} ${isDimmed ? 'opacity-50' : ''}`}
+                    className={`group cursor-pointer transition-colors ${isSelected ? 'bg-sky-50' : 'hover:bg-slate-50'} ${isDimmed ? 'opacity-50' : ''}`}
                   >
-                    <td className="px-4 py-3 text-slate-500">{e.product_name || '—'}</td>
-                    <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{e.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{e.model_type}</td>
-                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{paramSummary(e)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.accuracy  : m?.accuracy)  : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.precision : m?.precision) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.recall    : m?.recall)    : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.f1_score  : m?.f1_score)  : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.f2_score  : m?.f2_score)  : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-slate-800">{isCompleted ? fmt(m?.auc) : '—'}</td>
-                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{e.created_at.slice(0, 19).replace('T', ' ')}</td>
-                    <td className="px-4 py-3">
+                    <td className={`sticky left-0 z-[1] px-3 py-2 font-medium text-slate-800 whitespace-nowrap border-r border-slate-200 ${stickyBg}`}>
+                      {e.name}
+                    </td>
+                    {basicsOpen ? (
+                      <>
+                        <td className="px-3 py-2 text-slate-500">{e.product_name || '—'}</td>
+                        <td className="px-3 py-2 text-slate-600">{e.model_type}</td>
+                        <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{paramSummary(e)}</td>
+                      </>
+                    ) : (
+                      <td />
+                    )}
+                    {metricsOpen ? (
+                      <>
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.accuracy  : m?.accuracy)  : '—'}</td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.precision : m?.precision) : '—'}</td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.recall    : m?.recall)    : '—'}</td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.f1_score  : m?.f1_score)  : '—'}</td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-700">{isCompleted ? fmt(isSelected && recomputed ? recomputed.f2_score  : m?.f2_score)  : '—'}</td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">{isCompleted ? fmt(m?.auc) : '—'}</td>
+                      </>
+                    ) : (
+                      <td />
+                    )}
+                    <td className={`sticky right-40 z-[1] px-3 py-2 text-slate-500 whitespace-nowrap ${stickyBg}`}>
+                      {e.created_at.slice(0, 19).replace('T', ' ')}
+                    </td>
+                    <td className={`sticky right-12 z-[1] px-3 py-2 ${stickyBg}`}>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         e.status === 'completed' ? 'bg-emerald-100 text-emerald-700'
-                        : e.status === '중단' ? 'bg-slate-100 text-slate-500'
                         : 'bg-slate-100 text-slate-500'
                       }`}>
                         {e.status === 'completed' ? (e.early_stopped ? '완료 (조기종료)' : '완료') : e.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={`sticky right-0 z-[1] px-3 py-2 text-right ${stickyBg}`}>
                       <button
                         onClick={ev => { ev.stopPropagation(); handleDeleteRow(e.experiment_id); }}
                         className="text-slate-300 hover:text-red-400 cursor-pointer transition-colors"
