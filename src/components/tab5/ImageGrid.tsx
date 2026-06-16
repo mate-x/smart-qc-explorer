@@ -4,7 +4,7 @@ import {
   getTripletImageUrl,
   getOriginalImageUrl,
   getGtMaskImageUrl,
-  getOverlayImageUrl,
+  getHeatmapImageUrl,
   getPredictedMaskImageUrl,
 } from '../../api/anomalyMapApi';
 
@@ -218,7 +218,7 @@ function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
       {img.has_gt_mask ? (
         <div className="grid grid-cols-2 gap-3">
           <PanelImage label="원본 이미지" src={getOriginalImageUrl(expId, img.image_path)} alt="원본 이미지" />
-          <PanelImage label="Overlay" src={getOverlayImageUrl(expId, img.image_path, threshold)} alt="Overlay" />
+          <PanelImage label="Heatmap" src={getHeatmapImageUrl(expId, img.image_path)} alt="Heatmap" />
           <PanelImage label="GT 마스크" src={getGtMaskImageUrl(expId, img.image_path)} alt="GT 마스크" />
           <PanelImage label="Predicted Mask" src={getPredictedMaskImageUrl(expId, img.image_path, threshold)} alt="Predicted Mask" />
         </div>
@@ -226,7 +226,7 @@ function DetailPanel({ img, expId, threshold, onClose }: DetailPanelProps) {
         /* GT 없을 때: 3-panel 1행 */
         <div className="grid grid-cols-3 gap-3">
           <PanelImage label="원본 이미지" src={getOriginalImageUrl(expId, img.image_path)} alt="원본 이미지" />
-          <PanelImage label="Overlay" src={getOverlayImageUrl(expId, img.image_path, threshold)} alt="Overlay" />
+          <PanelImage label="Heatmap" src={getHeatmapImageUrl(expId, img.image_path)} alt="Heatmap" />
           <PanelImage label="Predicted Mask" src={getPredictedMaskImageUrl(expId, img.image_path, threshold)} alt="Predicted Mask" />
         </div>
       )}
