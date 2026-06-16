@@ -90,15 +90,6 @@ export default function QueuePanel() {
 
   if (filteredItems.length === 0) return null;
 
-  async function handleDelete(id: string) {
-    setDeleteError(null);
-    try {
-      await deleteItem(id);
-    } catch (e: unknown) {
-      setDeleteError((e as { message?: string })?.message ?? '삭제 실패');
-    }
-  }
-
   async function handleBatchStart() {
     setBatchLoading(true);
     setBatchError(null);
@@ -137,7 +128,7 @@ export default function QueuePanel() {
   async function handleDelete(id: string) {
     setDeleteError(null);
     try {
-      await deleteQueueItem(id);
+      await deleteItem(id);
       setConfirmDeleteId(null);
       await loadQueue();
     } catch (e: unknown) {
