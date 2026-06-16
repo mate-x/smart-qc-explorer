@@ -33,7 +33,12 @@ export function useTrainingWs() {
 
       ws.onclose = () => {
         if (!destroyed) {
-          reconnectTimer = window.setTimeout(connect, 3000);
+          reconnectTimer = window.setTimeout(() => {
+            getTrainingStatus()
+              .then((res) => { if (!destroyed) dispatch({ type: 'snapshot', ...res.data }); })
+              .catch(() => {});
+            connect();
+          }, 3000);
         }
       };
     }
