@@ -39,9 +39,13 @@ export default function ProgressSection() {
   const inferenceBaseRef = useRef<number>(0);
   const [inferenceCount, setInferenceCount] = useState(0);
 
+  const trainingBaseRef = useRef<number>(0);
+  const [trainingCount, setTrainingCount] = useState(0);
+
   const pct = progress ? Math.min(100, Math.round((progress.step / progress.total) * 100)) : 0;
   const ratio = progress ? progress.step / progress.total : 0;
-  const etaSecs = ratio > 0 && progress ? Math.round((progress.elapsed / ratio) * (1 - ratio)) : null;
+  const displayElapsed = trainingBaseRef.current + trainingCount;
+  const etaSecs = ratio > 0 && progress ? Math.round((displayElapsed / ratio) * (1 - ratio)) : null;
   const chartData = downsample(loss_history, 500);
   const isInferenceStage = current_stage_name === '테스트 추론' || current_stage_name === '완료';
 
@@ -59,6 +63,21 @@ export default function ProgressSection() {
     }, 1000);
     return () => clearInterval(timer);
   }, [isInferenceStage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isInferenceStage || !progress) {
+      setTrainingCount(0);
+      return;
+    }
+    trainingBaseRef.current = progress.elapsed;
+    setTrainingCount(0);
+    let count = 0;
+    const timer = setInterval(() => {
+      count += 1;
+      setTrainingCount(count);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isInferenceStage, progress?.elapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePauseToggle() {
     setPauseLoading(true);
@@ -125,7 +144,7 @@ export default function ProgressSection() {
             {model_type !== 'patchcore' && (
               <span>Loss: <span className="font-mono font-medium text-slate-800">{progress.loss.toFixed(6)}</span></span>
             )}
-            <span>경과: {fmtSecs(progress.elapsed)}</span>
+            <span>경과: {fmtSecs(displayElapsed)}</span>
             {etaSecs != null && <span>예상 잔여: {fmtSecs(etaSecs)}</span>}
           </div>
         </div>
